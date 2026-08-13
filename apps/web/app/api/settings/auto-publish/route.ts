@@ -11,13 +11,12 @@ const update = z.object({
   confirmed: z.literal(true).optional(),
 });
 
-const demoSettings = { youtube: false, instagram: false };
-
 export async function GET() {
   let close: (() => Promise<void>) | undefined;
   try {
     const user = await requireUser();
-    if (user.demo) return NextResponse.json(demoSettings);
+    if (user.demo)
+      return NextResponse.json({ youtube: false, instagram: false });
     const database = createDatabase();
     close = database.close;
     const [profile] = await database.db
@@ -50,8 +49,12 @@ export async function PATCH(request: Request) {
         { status: 409 }
       );
     if (user.demo) {
-      demoSettings[body.provider] = body.enabled;
-      return NextResponse.json(demoSettings);
+      return NextResponse.json({
+        mode: 'demo',
+        provider: body.provider,
+        enabled: body.enabled,
+        persisted: false,
+      });
     }
     const database = createDatabase();
     close = database.close;

@@ -48,7 +48,13 @@ test('auto-publish defaults off and requires explicit browser confirmation', asy
   await youtube.click();
   await expect(youtube).toHaveAttribute('aria-pressed', 'false');
   page.once('dialog', (dialog) => dialog.accept());
+  const update = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/settings/auto-publish') &&
+      response.request().method() === 'PATCH'
+  );
   await youtube.click();
+  expect((await update).ok()).toBe(true);
   await expect(
     page.getByRole('button', { name: 'Disable YouTube auto-publish' })
   ).toHaveAttribute('aria-pressed', 'true');

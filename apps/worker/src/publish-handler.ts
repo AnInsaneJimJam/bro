@@ -124,6 +124,13 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
             },
           };
         });
+      if (destinations.length !== new Set(data.providers).size)
+        throw Object.assign(
+          new Error(
+            'The publish job destinations no longer match the queued request.'
+          ),
+          { code: 'PUBLISH_DESTINATION_MISMATCH', retryable: false }
+        );
       await database.db
         .update(publishJobs)
         .set({ state: 'processing', updatedAt: new Date() })

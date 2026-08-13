@@ -32,6 +32,11 @@ export function initialPublishState(input: {
 export function aggregateDestinationState(
   destinations: Destination[]
 ): PublishState {
+  if (!destinations.length)
+    throw Object.assign(
+      new Error('A publish job must contain at least one destination'),
+      { code: 'PUBLISH_DESTINATIONS_EMPTY', retryable: false }
+    );
   if (destinations.every((d) => d.state === 'published')) return 'published';
   if (
     destinations.some((d) => d.state === 'published') &&

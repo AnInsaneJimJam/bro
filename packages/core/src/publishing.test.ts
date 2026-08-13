@@ -5,6 +5,8 @@ import {
   retryableDestinations,
 } from './publishing';
 describe('publishing policy', () => {
+  it('fails closed when a publish job has no destinations', () =>
+    expect(() => aggregateDestinationState([])).toThrow(/at least one/));
   it('requires confirmation when auto publish is off', () =>
     expect(
       initialPublishState({

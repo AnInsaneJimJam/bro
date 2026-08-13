@@ -104,6 +104,7 @@ export async function POST(request: Request) {
         .where(
           and(
             eq(platformConnections.userId, user.id),
+            eq(platformConnections.status, 'healthy'),
             inArray(platformConnections.provider, body.providers)
           )
         ),
