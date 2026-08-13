@@ -23,7 +23,8 @@ export async function GET(request: Request) {
       return NextResponse.json([
         {
           id: '30000000-0000-4000-8000-000000000001',
-          state: 'captions_ready',
+          state: 'ready',
+          metadata: { filename: 'ai-memory-demo-captioned.mp4' },
           demo: true,
         },
       ]);

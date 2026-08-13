@@ -15,8 +15,15 @@ export async function POST(
     const user = await requireUser();
     if (user.demo)
       return NextResponse.json(
-        { error: 'Demo mode has no live publish to confirm.' },
-        { status: 409 }
+        {
+          mode: 'demo',
+          demo: true,
+          state: 'scheduled',
+          persisted: false,
+          notice:
+            'Demo schedule confirmed locally. No YouTube or Instagram request was made.',
+        },
+        { status: 202 }
       );
     const { jobId } = await context.params;
     z.string().uuid().parse(jobId);

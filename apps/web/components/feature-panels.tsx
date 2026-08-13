@@ -715,10 +715,16 @@ function Videos() {
   );
 }
 function Calendar() {
-  type Job = { id: string; scheduledAt: string; state: string };
+  type Job = {
+    id: string;
+    scheduledAt: string;
+    scheduledLocalDate?: string;
+    state: string;
+  };
   type Project = {
     id: string;
     state: string;
+    demo?: boolean;
     metadata?: { filename?: string };
   };
   const now = new Date(),
@@ -803,7 +809,22 @@ function Calendar() {
           method: 'POST',
         }),
         result = await confirmed.json();
-      setMessage(confirmed.ok ? 'Publish job scheduled.' : result.error);
+      if (confirmed.ok && data.demo) {
+        const scheduledAt = new Date(selected).toISOString();
+        setJobs((current) => [
+          ...current,
+          {
+            id: data.jobId,
+            scheduledAt,
+            scheduledLocalDate: selected.slice(0, 10),
+            state: 'scheduled · demo',
+          },
+        ]);
+        setMessage(
+          'Demo schedule added to this calendar only. No platform request was made.'
+        );
+        return;
+      } else setMessage(confirmed.ok ? 'Publish job scheduled.' : result.error);
     } else setMessage(response.ok ? 'Publish job scheduled.' : data.error);
     load();
   }
@@ -861,9 +882,10 @@ function Calendar() {
           const day = i + 1,
             dayJobs = jobs.filter(
               (job) =>
-                new Date(job.scheduledAt).toLocaleDateString('en-CA', {
-                  timeZone: zone,
-                }) ===
+                (job.scheduledLocalDate ||
+                  new Date(job.scheduledAt).toLocaleDateString('en-CA', {
+                    timeZone: zone,
+                  })) ===
                 `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
             );
           return (

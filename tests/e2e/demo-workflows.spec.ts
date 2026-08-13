@@ -76,6 +76,26 @@ test('mobile navigation exposes calendar and keeps manual slot usable', async ({
   await expect(page.getByLabel('Manual future slot')).toBeVisible();
 });
 
+test('demo calendar completes a clearly labeled local schedule', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  if (testInfo.project.name.includes('mobile'))
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('button', { name: 'Calendar', exact: true }).click();
+  await expect(page.locator('.slot-editor select')).toHaveValue(
+    '30000000-0000-4000-8000-000000000001'
+  );
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Review schedule' }).click();
+  await expect(
+    page.getByText(
+      'Demo schedule added to this calendar only. No platform request was made.'
+    )
+  ).toBeVisible();
+  await expect(page.getByText(/scheduled · demo/)).toBeVisible();
+});
+
 test('caption editor supports split merge delete and overlap validation', async ({
   page,
 }, testInfo) => {

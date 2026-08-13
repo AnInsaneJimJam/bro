@@ -70,13 +70,43 @@ export async function POST(request: Request) {
   let close: (() => Promise<void>) | undefined;
   try {
     const user = await requireUser();
-    if (user.demo)
+    const body = input.parse(await request.json());
+    if (user.demo) {
+      const timeZone = body.timeZone || 'Asia/Kolkata';
+      if (body.mode === 'schedule' && !body.localDateTime)
+        throw new Error('Which local date and time should Bro schedule?');
+      if (body.mode === 'schedule')
+        schedulingIntentToUtc({
+          localDateTime: body.localDateTime!,
+          timeZone,
+        });
       return NextResponse.json(
-        { error: 'Demo mode never simulates a successful live publish.' },
-        { status: 409 }
+        {
+          mode: 'demo',
+          demo: true,
+          requiresConfirmation: true,
+          jobId: crypto.randomUUID(),
+          card: validateConfirmationCard({
+            projectId: body.projectId,
+            mediaName: 'ai-memory-demo-captioned.mp4',
+            providers: body.providers,
+            title: body.metadata?.youtube?.title || 'AI memory workflow',
+            caption:
+              body.metadata?.instagram?.caption ||
+              body.metadata?.youtube?.description ||
+              'A clearly labeled Bro demo post.',
+            scheduledAt:
+              body.mode === 'schedule' ? body.localDateTime : 'Publish now',
+            timeZone,
+            visibility: body.metadata?.youtube?.visibility || 'public',
+          }),
+          notice:
+            'Demo preview only. Confirming creates a browser-local calendar card and never calls a platform.',
+        },
+        { status: 202 }
       );
-    const body = input.parse(await request.json()),
-      database = createDatabase();
+    }
+    const database = createDatabase();
     close = database.close;
     const [[profile], [project], connections] = await Promise.all([
       database.db
