@@ -1,0 +1,27 @@
+export type OAuthProvider = 'youtube' | 'instagram' | 'reddit';
+export function oauthAuthorizationUrl(
+  provider: OAuthProvider,
+  input: { state: string; challenge: string }
+) {
+  if (provider === 'youtube') {
+    requireEnv('GOOGLE_CLIENT_ID');
+    return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ client_id: process.env.GOOGLE_CLIENT_ID!, redirect_uri: process.env.GOOGLE_REDIRECT_URI!, response_type: 'code', scope: process.env.GOOGLE_SCOPES!, access_type: 'offline', prompt: 'consent', state: input.state, code_challenge: input.challenge, code_challenge_method: 'S256' })}`;
+  }
+  if (provider === 'instagram') {
+    requireEnv('META_APP_ID');
+    return `https://www.facebook.com/${process.env.META_API_VERSION || 'v24.0'}/dialog/oauth?${new URLSearchParams({ client_id: process.env.META_APP_ID!, redirect_uri: process.env.META_REDIRECT_URI!, response_type: 'code', scope: process.env.META_SCOPES!, state: input.state, code_challenge: input.challenge, code_challenge_method: 'S256' })}`;
+  }
+  requireEnv('REDDIT_CLIENT_ID');
+  if (process.env.REDDIT_INTEGRATION_ENABLED !== 'true')
+    throw Object.assign(
+      new Error('Reddit OAuth is disabled pending approved API access.'),
+      { status: 503 }
+    );
+  return `https://www.reddit.com/api/v1/authorize?${new URLSearchParams({ client_id: process.env.REDDIT_CLIENT_ID!, redirect_uri: process.env.REDDIT_REDIRECT_URI!, response_type: 'code', duration: 'permanent', scope: 'identity history read', state: input.state, code_challenge: input.challenge, code_challenge_method: 'S256' })}`;
+}
+function requireEnv(name: string) {
+  if (!process.env[name])
+    throw Object.assign(new Error(`${name} is not configured`), {
+      status: 503,
+    });
+}

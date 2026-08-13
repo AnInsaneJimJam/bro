@@ -1,0 +1,259 @@
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import OpenAI from 'openai';
+import { createClient } from '@supabase/supabase-js';
+import { and, asc, eq } from 'drizzle-orm';
+import { OpenAITranscriptionProvider } from '@bro/ai';
+import {
+  captionCues,
+  createDatabase,
+  transcriptWords,
+  videoProjects,
+} from '@bro/db';
+import {
+  captionsToAss,
+  detectedVideoMime,
+  extractAudio,
+  probeVideo,
+  renderArgs,
+  runFfmpeg,
+  segmentCaptions,
+  validateUpload,
+} from '@bro/video';
+import type { JobHandlers } from './jobs';
+export function createVideoHandlers(): Pick<
+  JobHandlers,
+  'transcribe-video' | 'render-video'
+> {
+  const url = required('NEXT_PUBLIC_SUPABASE_URL'),
+    key = required('SUPABASE_SERVICE_ROLE_KEY'),
+    storage = createClient(url, key, {
+      auth: { persistSession: false },
+    }).storage,
+    openai = new OpenAI({ apiKey: required('OPENAI_API_KEY') }),
+    transcriber = new OpenAITranscriptionProvider(
+      openai,
+      process.env.OPENAI_COMMAND_TRANSCRIPTION_MODEL || 'gpt-transcribe',
+      process.env.OPENAI_CAPTION_TRANSCRIPTION_MODEL || 'whisper-1'
+    );
+  return {
+    'transcribe-video': async (data) =>
+      withTemp(async (dir) => {
+        const lookup = createDatabase();
+        const [owned] = await lookup.db
+          .select({
+            originalKey: videoProjects.originalKey,
+            metadata: videoProjects.metadata,
+          })
+          .from(videoProjects)
+          .where(
+            and(
+              eq(videoProjects.id, data.projectId),
+              eq(videoProjects.userId, data.userId)
+            )
+          )
+          .limit(1);
+        await lookup.close();
+        if (!owned?.originalKey || owned.originalKey !== data.originalObjectKey)
+          throw new Error(
+            'Owned upload reference does not match the queued transcription job'
+          );
+        const upload = (owned.metadata || {}) as {
+          filename?: string;
+          mimeType?: string;
+        };
+        const original = await download(
+            storage,
+            process.env.SUPABASE_ORIGINALS_BUCKET || 'bro-originals',
+            data.originalObjectKey
+          ),
+          inputPath = join(dir, 'original-upload'),
+          audioPath = join(dir, 'audio.mp3');
+        await writeFile(inputPath, original);
+        const metadata = await probeVideo(inputPath);
+        validateUpload(
+          {
+            filename: upload.filename || 'uploaded-video',
+            declaredMime: upload.mimeType || 'application/octet-stream',
+            detectedMime: detectedVideoMime(metadata.formatName),
+            size: original.length,
+            duration: metadata.duration,
+          },
+          {
+            maxBytes: Number(process.env.MAX_UPLOAD_BYTES || 536870912),
+            maxDuration: Number(process.env.MAX_VIDEO_DURATION_SECONDS || 60),
+          }
+        );
+        await extractAudio(inputPath, audioPath);
+        const audio = await readFile(audioPath),
+          audioKey = `${data.userId}/${data.projectId}/audio.mp3`;
+        const uploaded = await storage
+          .from(process.env.SUPABASE_AUDIO_BUCKET || 'bro-audio')
+          .upload(audioKey, audio, { contentType: 'audio/mpeg', upsert: true });
+        if (uploaded.error) throw new Error(uploaded.error.message);
+        const transcript = await transcriber.transcribeWithWordTimestamps(
+            new File([audio], 'audio.mp3', { type: 'audio/mpeg' })
+          ),
+          cues = segmentCaptions(transcript.words);
+        const database = createDatabase();
+        try {
+          await database.db.transaction(async (tx) => {
+            await tx
+              .delete(captionCues)
+              .where(eq(captionCues.projectId, data.projectId));
+            await tx
+              .delete(transcriptWords)
+              .where(eq(transcriptWords.projectId, data.projectId));
+            if (transcript.words.length)
+              await tx.insert(transcriptWords).values(
+                transcript.words.map((word, position) => ({
+                  projectId: data.projectId,
+                  text: word.text,
+                  start: word.start,
+                  end: word.end,
+                  confidence: word.confidence,
+                  position,
+                }))
+              );
+            if (cues.length)
+              await tx.insert(captionCues).values(
+                cues.map((cue, position) => ({
+                  projectId: data.projectId,
+                  text: cue.text,
+                  start: cue.start,
+                  end: cue.end,
+                  position,
+                  style: {
+                    fontSize: 58,
+                    textColor: '#ffffff',
+                    outline: 4,
+                    verticalPosition: 'bottom',
+                  },
+                }))
+              );
+            await tx
+              .update(videoProjects)
+              .set({
+                metadata: { ...metadata, audioObjectKey: audioKey },
+                state: 'captions_ready',
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(videoProjects.id, data.projectId),
+                  eq(videoProjects.userId, data.userId)
+                )
+              );
+          });
+        } finally {
+          await database.close();
+        }
+        return { wordCount: transcript.words.length, cueCount: cues.length };
+      }),
+    'render-video': async (data) =>
+      withTemp(async (dir) => {
+        const database = createDatabase();
+        try {
+          const [project] = await database.db
+            .select()
+            .from(videoProjects)
+            .where(
+              and(
+                eq(videoProjects.id, data.projectId),
+                eq(videoProjects.userId, data.userId)
+              )
+            )
+            .limit(1);
+          if (!project?.originalKey)
+            throw new Error('Owned video project or original media not found');
+          const rows = await database.db
+            .select()
+            .from(captionCues)
+            .where(eq(captionCues.projectId, data.projectId))
+            .orderBy(asc(captionCues.position));
+          if (!rows.length)
+            throw new Error('Caption cues are required before rendering');
+          const inputPath = join(dir, 'original.mp4'),
+            assPath = join(dir, 'captions.ass'),
+            outputPath = join(dir, 'rendered.mp4');
+          await writeFile(
+            inputPath,
+            await download(
+              storage,
+              process.env.SUPABASE_ORIGINALS_BUCKET || 'bro-originals',
+              project.originalKey
+            )
+          );
+          await writeFile(
+            assPath,
+            captionsToAss(
+              rows.map((row) => ({
+                text: row.text || '',
+                start: row.start || 0,
+                end: row.end || 0,
+              })),
+              rows[0]?.style as {
+                fontSize?: number;
+                outline?: number;
+                verticalPosition?: 'top' | 'middle' | 'bottom';
+              }
+            )
+          );
+          await runFfmpeg(renderArgs(inputPath, assPath, outputPath));
+          const rendered = await readFile(outputPath),
+            renderedKey = `${data.userId}/${data.projectId}/rendered.mp4`,
+            uploaded = await storage
+              .from(process.env.SUPABASE_RENDERS_BUCKET || 'bro-renders')
+              .upload(renderedKey, rendered, {
+                contentType: 'video/mp4',
+                upsert: true,
+              });
+          if (uploaded.error) throw new Error(uploaded.error.message);
+          await database.db
+            .update(videoProjects)
+            .set({
+              renderedKey,
+              metadata: {
+                ...((project.metadata || {}) as object),
+                renderedSize: rendered.length,
+                renderedMimeType: 'video/mp4',
+              },
+              state: 'ready',
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(videoProjects.id, data.projectId),
+                eq(videoProjects.userId, data.userId)
+              )
+            );
+          return { renderedKey, size: rendered.length };
+        } finally {
+          await database.close();
+        }
+      }),
+  };
+}
+async function download(
+  storage: ReturnType<typeof createClient>['storage'],
+  bucket: string,
+  key: string
+) {
+  const { data, error } = await storage.from(bucket).download(key);
+  if (error) throw new Error(error.message);
+  return Buffer.from(await data.arrayBuffer());
+}
+async function withTemp<T>(operation: (dir: string) => Promise<T>) {
+  const dir = await mkdtemp(join(tmpdir(), 'bro-worker-'));
+  try {
+    return await operation(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+function required(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not configured`);
+  return value;
+}
