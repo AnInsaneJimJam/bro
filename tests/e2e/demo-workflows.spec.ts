@@ -36,6 +36,18 @@ test('chat asks for missing script duration instead of guessing', async ({
   ).toBeVisible();
 });
 
+test('chat routes the latest-video caption command', async ({ page }) => {
+  await page.goto('/');
+  const composer = page.getByPlaceholder(/Ask Bro/);
+  await composer.fill('Create captions for my latest uploaded video');
+  await composer.press('Enter');
+  await expect(
+    page.getByText(
+      'The labeled demo video has editable caption cues ready in Videos.'
+    )
+  ).toBeVisible();
+});
+
 test('auto-publish defaults off and requires explicit browser confirmation', async ({
   page,
 }) => {

@@ -154,5 +154,7 @@ function summarize(tool: string, result: unknown) {
     return `Drafted “${(result as { title: string }).title}”. It is saved as version 1.`;
   if (tool === 'analyze_comments')
     return (result as { summary: string }).summary;
+  if (tool === 'transcribe_video_for_captions')
+    return 'The labeled demo video has editable caption cues ready in Videos.';
   return `Completed ${tool}.`;
 }

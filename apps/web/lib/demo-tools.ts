@@ -24,6 +24,15 @@ export async function executeDemoTool(
       );
     case 'list_scripts':
       return demoStore.listScripts();
+    case 'transcribe_video_for_captions':
+      return {
+        projectId: args.projectId,
+        state: 'captions_ready',
+        cueCount: 2,
+        demo: true,
+        notice:
+          'Loaded the labeled sample transcript. No synthetic transcription was presented as a live job.',
+      };
     case 'analyze_comments':
       return {
         sampleSize: 12,

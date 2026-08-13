@@ -18,4 +18,16 @@ describe('command resolution', () => {
     expect(resolveDemoCommand('Publish to Instagram now')).toEqual({
       followUp: 'Which rendered video should I publish?',
     }));
+  it('routes an explicit latest-video caption request', () =>
+    expect(
+      resolveDemoCommand('Create captions for my latest uploaded video')
+    ).toEqual({
+      tool: 'transcribe_video_for_captions',
+      arguments: { projectId: '30000000-0000-4000-8000-000000000001' },
+    }));
+  it('does not mistake cancellation for a new schedule', () =>
+    expect(resolveDemoCommand("Cancel tomorrow's scheduled post")).toEqual({
+      followUp:
+        'Which scheduled post should I cancel? You can provide its title or job ID.',
+    }));
 });

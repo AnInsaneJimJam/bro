@@ -48,6 +48,22 @@ export function resolveDemoCommand(text: string): ResolvedCommand {
       arguments: { count, countryCode: 'IN' },
     };
   }
+  if (/captions?|transcrib/.test(lower)) {
+    if (!/latest|this|uploaded/.test(lower))
+      return {
+        followUp:
+          'Which uploaded video should I transcribe for editable captions?',
+      };
+    return {
+      tool: 'transcribe_video_for_captions',
+      arguments: { projectId: '30000000-0000-4000-8000-000000000001' },
+    };
+  }
+  if (/cancel/.test(lower))
+    return {
+      followUp:
+        'Which scheduled post should I cancel? You can provide its title or job ID.',
+    };
   if (/schedule/.test(lower)) {
     if (!/(youtube|instagram)/.test(lower))
       return {
@@ -71,11 +87,6 @@ export function resolveDemoCommand(text: string): ResolvedCommand {
   }
   if (/comments?/.test(lower))
     return { tool: 'analyze_comments', arguments: { question: value } };
-  if (/cancel/.test(lower))
-    return {
-      followUp:
-        'Which scheduled post should I cancel? You can provide its title or job ID.',
-    };
   return {
     followUp:
       'I can find your niche, discover topic opportunities, write a short script, create captions, schedule or publish a rendered video, and analyze comments. What would you like to do?',
