@@ -58,6 +58,20 @@ pnpm dev:worker
 
 Open `http://localhost:3000`. For a platform-free demo, retain `NEXT_PUBLIC_DEMO_MODE=true`. External social side effects remain disabled; optional OpenAI-backed microphone transcription may still run when its key is configured.
 
+### Real-data credential checklist
+
+Set `NEXT_PUBLIC_DEMO_MODE=false` and provide these values in `.env`. Never commit that file or paste secrets into the browser:
+
+- **OpenAI:** `OPENAI_API_KEY`. The four `OPENAI_*_MODEL` values are configurable model names, not additional keys.
+- **Supabase:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY`, plus `DATABASE_URL` and `DATABASE_DIRECT_URL` for its Postgres database.
+- **Bro security:** `TOKEN_ENCRYPTION_KEY` and `OAUTH_STATE_SECRET`, which you generate yourself; these are not third-party API keys.
+- **YouTube:** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from a Google Cloud Web OAuth client. No separate YouTube API key is needed for Bro's owned-channel, comment, and upload flows.
+- **Instagram:** `META_APP_ID` and `META_APP_SECRET` from a Meta app. Live publishing and owned-media comments also require an eligible Instagram professional account and the relevant Meta permissions/review.
+- **Reddit (optional):** `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`; keep `REDDIT_INTEGRATION_ENABLED=false` until Reddit approves the intended use.
+- **Error reporting (optional):** `SENTRY_DSN`.
+
+Redirect URIs, scopes, API/model versions, bucket names, limits, and worker settings in `.env.example` are configuration rather than secrets, but they must match the corresponding provider console exactly.
+
 ### Supabase setup
 
 1. Create private buckets named `bro-originals`, `bro-audio`, and `bro-renders` (or change the environment names).

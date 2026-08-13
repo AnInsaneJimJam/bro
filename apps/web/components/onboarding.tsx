@@ -15,12 +15,19 @@ const countries = [
   { code: 'CA', name: 'Canada', zone: 'America/Toronto' },
   { code: 'AU', name: 'Australia', zone: 'Australia/Sydney' },
 ];
-export function Onboarding() {
-  const [step, setStep] = useState(1);
+export function Onboarding({
+  initialStep = 1,
+  demoMode = false,
+}: {
+  initialStep?: number;
+  demoMode?: boolean;
+}) {
+  const [step, setStep] = useState(initialStep);
   const [name, setName] = useState('Creator');
   const [country, setCountry] = useState(countries[0]!);
   const [niche, setNiche] = useState('AI tools & productivity');
   const [saved, setSaved] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState('');
   async function save() {
     const r = await fetch('/api/profile', {
       method: 'PATCH',
@@ -82,29 +89,37 @@ export function Onboarding() {
         )}
         {step === 2 && (
           <>
-            <h1>Connect your accounts</h1>
+            <h1>Connect your creator accounts</h1>
             <p>
-              Connections are optional now. Bro never asks for platform
+              Start with YouTube and Instagram. Bro never asks for platform
               passwords and uses official OAuth only.
             </p>
             <Connection
+              provider="youtube"
               name="YouTube"
               icon={<Youtube />}
               note="Owned Shorts, publishing and comments"
+              onDemo={setConnectionMessage}
+              demoMode={demoMode}
             />
             <Connection
+              provider="instagram"
               name="Instagram"
               icon={<Instagram />}
               note="Requires an eligible professional account"
+              onDemo={setConnectionMessage}
+              demoMode={demoMode}
             />
-            <Connection
-              name="Reddit"
-              icon={<b>r/</b>}
-              note="Niche signals only; feature-flagged pending approval"
-            />
-            <div className="demo-note">
-              Demo mode — connection buttons make no live provider calls.
-            </div>
+            <small>Reddit is optional and can be added later.</small>
+            {demoMode && !connectionMessage && (
+              <div className="demo-note">
+                Demo mode does not call YouTube or Instagram. Add provider
+                credentials and turn demo mode off to use official OAuth.
+              </div>
+            )}
+            {connectionMessage && (
+              <div className="demo-note">{connectionMessage}</div>
+            )}
           </>
         )}
         {step === 3 && (
@@ -145,7 +160,7 @@ export function Onboarding() {
               {saved ? 'Profile saved. ' : ''}Auto-publishing remains off for
               YouTube and Instagram until you explicitly enable it.
             </p>
-            <a className="primary-link" href="/">
+            <a className="primary-link" href="/app">
               Open Bro <ArrowRight />
             </a>
           </>
@@ -175,13 +190,19 @@ export function Onboarding() {
   );
 }
 function Connection({
+  provider,
   name,
   note,
   icon,
+  onDemo,
+  demoMode,
 }: {
+  provider: 'youtube' | 'instagram';
   name: string;
   note: string;
   icon: React.ReactNode;
+  onDemo: (message: string) => void;
+  demoMode: boolean;
 }) {
   return (
     <div className="connect-row">
@@ -190,7 +211,17 @@ function Connection({
         <strong>{name}</strong>
         <small>{note}</small>
       </span>
-      <button title="Live OAuth requires provider credentials">Connect</button>
+      <button
+        onClick={() => {
+          if (demoMode)
+            onDemo(
+              `Demo mode does not call ${name}. Add the provider credentials, set NEXT_PUBLIC_DEMO_MODE=false, and use this same button for official OAuth.`
+            );
+          else window.location.href = `/api/oauth/${provider}/start`;
+        }}
+      >
+        Connect
+      </button>
     </div>
   );
 }

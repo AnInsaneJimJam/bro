@@ -1,9 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+test('landing page leads into YouTube and Instagram connection onboarding', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: /Your content workflow, handled/ })
+  ).toBeVisible();
+  await expect(
+    page.getByText('Official APIs. Your approval before publishing.')
+  ).toBeVisible();
+  await page
+    .locator('.landing-hero')
+    .getByRole('link', { name: 'Connect YouTube + Instagram' })
+    .click();
+  await expect(page).toHaveURL(/\/onboarding\?step=connections/);
+  await expect(
+    page.getByRole('heading', { name: 'Connect your creator accounts' })
+  ).toBeVisible();
+  await expect(page.getByText('YouTube', { exact: true })).toBeVisible();
+  await expect(page.getByText('Instagram', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Connect' }).first().click();
+  await expect(page.getByText(/Demo mode does not call YouTube/)).toBeVisible();
+});
+
 test('demo workspace labels data and navigates principal surfaces', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/app');
   await expect(page.getByText('Demo data', { exact: true })).toBeVisible();
   if (testInfo.project.name.includes('mobile'))
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -27,7 +51,7 @@ test('demo workspace labels data and navigates principal surfaces', async ({
 test('chat asks for missing script duration instead of guessing', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/app');
   const composer = page.getByPlaceholder(/Ask Bro/);
   await composer.fill('Write a script for topic 2');
   await composer.press('Enter');
@@ -37,7 +61,7 @@ test('chat asks for missing script duration instead of guessing', async ({
 });
 
 test('chat routes the latest-video caption command', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/app');
   const composer = page.getByPlaceholder(/Ask Bro/);
   await composer.fill('Create captions for my latest uploaded video');
   await composer.press('Enter');
@@ -51,7 +75,7 @@ test('chat routes the latest-video caption command', async ({ page }) => {
 test('auto-publish defaults off and requires explicit browser confirmation', async ({
   page,
 }) => {
-  await page.goto('/#Settings');
+  await page.goto('/app#Settings');
   const youtube = page.getByRole('button', {
     name: 'Enable YouTube auto-publish',
   });
@@ -79,7 +103,7 @@ test('mobile navigation exposes calendar and keeps manual slot usable', async ({
     !testInfo.project.name.includes('mobile'),
     'Mobile-specific acceptance path'
   );
-  await page.goto('/');
+  await page.goto('/app');
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Calendar', exact: true }).click();
   await expect(
@@ -91,7 +115,7 @@ test('mobile navigation exposes calendar and keeps manual slot usable', async ({
 test('demo calendar completes a clearly labeled local schedule', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/app');
   if (testInfo.project.name.includes('mobile'))
     await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Calendar', exact: true }).click();
@@ -111,7 +135,7 @@ test('demo calendar completes a clearly labeled local schedule', async ({
 test('caption editor supports split merge delete and overlap validation', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/app');
   if (testInfo.project.name.includes('mobile'))
     await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Videos', exact: true }).click();
@@ -133,7 +157,7 @@ test('caption editor supports split merge delete and overlap validation', async 
 test('comment analysis shows sample caveat and representative evidence', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/app');
   if (testInfo.project.name.includes('mobile'))
     await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Comments', exact: true }).click();
@@ -152,7 +176,7 @@ test('comment analysis shows sample caveat and representative evidence', async (
 });
 
 test('security headers are present', async ({ request }) => {
-  const response = await request.get('/');
+  const response = await request.get('/app');
   expect(response.headers()['x-content-type-options']).toBe('nosniff');
   expect(response.headers()['x-frame-options']).toBe('DENY');
   expect(response.headers()['content-security-policy']).toContain(
