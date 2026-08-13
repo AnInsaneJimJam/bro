@@ -8,7 +8,7 @@ import type {
   TrendSignal,
   TrendSignalAdapter,
 } from './index';
-import { providerJson } from './http';
+import { providerError, providerJson } from './http';
 type Token = () => Promise<string>;
 export class YouTubeAdapter
   implements
@@ -138,14 +138,19 @@ export class YouTubeAdapter
         body: metadata,
       }
     );
-    if (!session.ok)
-      throw new Error(`YouTube upload session failed (${session.status})`);
+    if (!session.ok) throw await providerError('youtube', session);
     const location = session.headers.get('location');
     if (!location)
       throw new Error('YouTube did not return a resumable session URL');
     const media = await this.http(input.mediaUrl);
     if (!media.ok || !media.body)
-      throw new Error(`Could not fetch rendered media (${media.status})`);
+      throw Object.assign(
+        new Error(`Could not fetch rendered media (${media.status})`),
+        {
+          code: `MEDIA_FETCH_${media.status}`,
+          retryable: media.status === 429 || media.status >= 500,
+        }
+      );
     const uploadInit = {
       method: 'PUT',
       headers: {
@@ -157,11 +162,7 @@ export class YouTubeAdapter
       duplex: 'half',
     } as RequestInit;
     const uploaded = await this.http(location, uploadInit);
-    if (!uploaded.ok)
-      throw Object.assign(
-        new Error(`YouTube media upload failed (${uploaded.status})`),
-        { retryable: uploaded.status >= 500 }
-      );
+    if (!uploaded.ok) throw await providerError('youtube', uploaded);
     const result = (await uploaded.json()) as { id: string };
     if (!result.id)
       throw new Error('YouTube upload response did not contain a video ID');

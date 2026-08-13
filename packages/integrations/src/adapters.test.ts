@@ -84,9 +84,33 @@ describe('official adapters', () => {
       () => json({ error: 'quota' }, 429)
     );
     await expect(adapter.connect()).rejects.toMatchObject({
-      code: 'HTTP_429',
+      code: 'PROVIDER_RATE_LIMITED',
       retryable: true,
     });
+  });
+  it('redacts provider payloads and honors retry-after guidance', async () => {
+    const adapter = new YouTubeAdapter(
+      async () => 'token',
+      () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                errors: [{ reason: 'rateLimitExceeded' }],
+                message: 'request included secret-token-value',
+              },
+            }),
+            { status: 429, headers: { 'retry-after': '12' } }
+          )
+        )
+    );
+    const error = await adapter.connect().catch((value) => value);
+    expect(error).toMatchObject({
+      code: 'PROVIDER_RATE_LIMITED',
+      retryable: true,
+      retryAfterMs: 12_000,
+    });
+    expect(String(error.message)).not.toContain('secret-token-value');
   });
 });
 describe('publishing adapters', () => {
