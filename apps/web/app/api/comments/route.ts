@@ -88,7 +88,33 @@ export async function POST(request: Request) {
         : NextResponse.json({
             mode: 'demo',
             sampleSize: 12,
+            lastSyncedAt: new Date().toISOString(),
             summary: 'Viewers want clearer privacy and setup explanations.',
+            themes: ['privacy', 'setup steps', 'tool cost'],
+            sentiment: {
+              positive: 7,
+              neutral: 3,
+              negative: 2,
+              note: 'Approximate model classification of the selected sample.',
+            },
+            frequentlyAskedQuestions: [
+              'Where is creator memory stored?',
+              'Can this workflow run with free tools?',
+            ],
+            confusionOrObjections: [
+              'The storage and privacy boundary needs a clearer explanation.',
+            ],
+            futureContentRequests: ['Show the setup from start to finish.'],
+            representativeComments: [
+              {
+                commentId: 'demo-comment-2',
+                excerpt: 'Where does it store the memory?',
+                platform: 'youtube',
+                postId: 'demo-post-1',
+                whyRepresentative:
+                  'It captures the most common privacy question.',
+              },
+            ],
             classificationNotice:
               'Sentiment is an approximate model classification.',
           });

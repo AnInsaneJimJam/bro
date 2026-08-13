@@ -16,6 +16,27 @@ Demo mode is visually labeled, never calls social platforms, and never reports a
 
 The model never receives OAuth tokens. Application routes validate ownership and policy; durable workers perform external side effects. Timestamps are stored in UTC while scheduling intent retains the user's IANA time zone.
 
+## Hackathon demo in two commands
+
+The labeled demo workspace needs no database or social-platform credentials:
+
+```bash
+pnpm install
+cp .env.example .env && pnpm dev
+```
+
+Open `http://localhost:3000` and choose **Continue with labeled demo data**. Keep `NEXT_PUBLIC_DEMO_MODE=true`. Add only `OPENAI_API_KEY` if you want microphone commands to use real English transcription; typed commands and the rest of the demo work without it.
+
+Suggested three-minute walkthrough:
+
+1. Show the evidence-backed confirmed niche and open **Ideas** to refresh scored, country-scoped opportunities.
+2. Ask Bro: `Write a 45-second script for topic 2 with a contrarian hook`, then edit and save the generated script.
+3. Ask: `Create captions for my latest uploaded video`, open **Videos**, edit/split/merge a caption cue, and show the render controls.
+4. Open **Calendar**, select the ready demo video, review the manual time slot, accept the confirmation, and point out the `scheduled · demo` card and no-platform-call notice.
+5. Open **Comments** and analyze what viewers are confused about, noting the sample size, approximate sentiment notice, and representative evidence.
+
+Demo mode never calls YouTube, Instagram, or Reddit. Calendar results are browser-local and explicitly labeled; they are not presented as live publishes.
+
 ## Local setup
 
 Requirements: Node.js 22, pnpm 10, FFmpeg/ffprobe, PostgreSQL 16 or Supabase, and a Supabase project for live Auth/Storage.
@@ -35,7 +56,7 @@ In another terminal, start durable work:
 pnpm dev:worker
 ```
 
-Open `http://localhost:3000`. For a UI-only demo, retain `NEXT_PUBLIC_DEMO_MODE=true`; live routes intentionally fail closed in demo mode.
+Open `http://localhost:3000`. For a platform-free demo, retain `NEXT_PUBLIC_DEMO_MODE=true`. External social side effects remain disabled; optional OpenAI-backed microphone transcription may still run when its key is configured.
 
 ### Supabase setup
 

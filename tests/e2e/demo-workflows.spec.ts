@@ -130,6 +130,27 @@ test('caption editor supports split merge delete and overlap validation', async 
   await expect(page.locator('.cue')).toHaveCount(1);
 });
 
+test('comment analysis shows sample caveat and representative evidence', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  if (testInfo.project.name.includes('mobile'))
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('button', { name: 'Comments', exact: true }).click();
+  await expect(page.getByText(/12 stored comments/)).toBeVisible();
+  await page.getByRole('button', { name: 'Analyze selected comments' }).click();
+  await expect(
+    page.getByText('Viewers want clearer privacy and setup explanations.')
+  ).toBeVisible();
+  await expect(
+    page.getByText('“Where does it store the memory?”')
+  ).toBeVisible();
+  await expect(page.getByText(/Sample: 12 retrieved comments/)).toBeVisible();
+  await expect(
+    page.getByText(/Sentiment is an approximate model classification/)
+  ).toBeVisible();
+});
+
 test('security headers are present', async ({ request }) => {
   const response = await request.get('/');
   expect(response.headers()['x-content-type-options']).toBe('nosniff');

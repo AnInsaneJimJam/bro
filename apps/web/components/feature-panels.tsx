@@ -1031,9 +1031,19 @@ function Comments() {
     );
   }
   async function analyze() {
-    const filters: { platforms?: string[]; from?: string } = {};
+    const filters: {
+      platforms?: string[];
+      from?: string;
+      to?: string;
+      keyword?: string;
+    } = {};
     if (platform !== 'all') filters.platforms = [platform];
-    if (date) filters.from = new Date(`${date}T00:00:00`).toISOString();
+    if (keyword) filters.keyword = keyword;
+    if (date) {
+      const start = new Date(`${date}T00:00:00`);
+      filters.from = start.toISOString();
+      filters.to = new Date(start.getTime() + 86400e3 - 1).toISOString();
+    }
     const response = await fetch('/api/comments', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
