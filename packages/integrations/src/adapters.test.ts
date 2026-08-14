@@ -180,6 +180,8 @@ describe('publishing adapters', () => {
       if (url.includes('/container?')) return json({ status_code: 'FINISHED' });
       if (url.includes('/acct/media_publish?'))
         return json({ id: 'ig-published' });
+      if (url.includes('/ig-published?'))
+        return json({ permalink: 'https://www.instagram.com/reel/abc/' });
       return json({}, 404);
     };
     const result = await new InstagramAdapter(
@@ -195,6 +197,35 @@ describe('publishing adapters', () => {
       caption: 'Caption',
     });
     expect(result.externalId).toBe('ig-published');
+    expect(result.url).toBe('https://www.instagram.com/reel/abc/');
     expect(calls.some((x) => x.includes('media_publish'))).toBe(true);
+  });
+  it('publishes a finished container on a retry instead of duplicating it', async () => {
+    const calls: string[] = [];
+    const http: HttpClient = async (url) => {
+      calls.push(url);
+      if (url.includes('/container?')) return json({ status_code: 'FINISHED' });
+      if (url.includes('/acct/media_publish?'))
+        return json({ id: 'published-2' });
+      if (url.includes('/published-2?'))
+        return json({ permalink: 'https://www.instagram.com/reel/retry/' });
+      return json({}, 404);
+    };
+    const result = await new InstagramAdapter(
+      async () => 'token',
+      'v24.0',
+      http
+    ).publish({
+      idempotencyKey: 'key',
+      provider: 'instagram',
+      providerAccountId: 'acct',
+      mediaUrl: 'https://media.test/video.mp4',
+      existingExternalId: 'container',
+    });
+    expect(result).toEqual({
+      externalId: 'published-2',
+      url: 'https://www.instagram.com/reel/retry/',
+    });
+    expect(calls.some((x) => x.includes('/acct/media?'))).toBe(false);
   });
 });

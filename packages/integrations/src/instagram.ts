@@ -91,8 +91,34 @@ export class InstagramAdapter
   async publish(input: PublishInput) {
     if (input.existingExternalId) {
       const status = await this.getPublishStatus(input.existingExternalId);
-      if (status === 'published')
-        return { externalId: input.existingExternalId };
+      if (status === 'published') {
+        if (!input.providerAccountId)
+          throw new Error('Instagram professional account ID is required');
+        const published = await providerJson<{ id: string }>(
+          'instagram',
+          this.http,
+          await this.url(`${input.providerAccountId}/media_publish`, {
+            creation_id: input.existingExternalId,
+          }),
+          { method: 'POST' }
+        );
+        if (!published.id)
+          throw new Error('Instagram did not return a published media ID');
+        return {
+          externalId: published.id,
+          url: await this.permalink(published.id),
+        };
+      }
+      if (status === 'processing')
+        throw Object.assign(
+          new Error('Instagram is still processing the publishing container'),
+          { retryable: true, externalId: input.existingExternalId }
+        );
+      if (status === 'failed')
+        throw Object.assign(
+          new Error('Instagram rejected or expired the publishing container'),
+          { retryable: false, externalId: input.existingExternalId }
+        );
     }
     const validation = await this.validateMedia(input);
     if (!validation.valid) throw new Error(validation.errors.join('; '));
@@ -136,7 +162,19 @@ export class InstagramAdapter
     );
     if (!published.id)
       throw new Error('Instagram did not return a published media ID');
-    return { externalId: published.id, url: `https://www.instagram.com/` };
+    return {
+      externalId: published.id,
+      url: await this.permalink(published.id),
+    };
+  }
+
+  private async permalink(mediaId: string) {
+    const data = await providerJson<{ permalink?: string }>(
+      'instagram',
+      this.http,
+      await this.url(mediaId, { fields: 'permalink' })
+    );
+    return data.permalink;
   }
   async getPublishStatus(externalId: string) {
     const data = await providerJson<{ status_code?: string }>(
