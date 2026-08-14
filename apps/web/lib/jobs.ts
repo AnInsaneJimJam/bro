@@ -1,11 +1,16 @@
 import PgBoss from 'pg-boss';
+import { getDatabaseSslOptions } from '@bro/db';
 async function withBoss<T>(operation: (boss: PgBoss) => Promise<T>) {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString)
     throw Object.assign(new Error('Durable job database is not configured'), {
       status: 503,
     });
-  const boss = new PgBoss({ connectionString });
+  const ssl = getDatabaseSslOptions();
+  const boss = new PgBoss({
+    connectionString,
+    ...(ssl ? { ssl } : {}),
+  });
   await boss.start();
   try {
     return await operation(boss);

@@ -4,6 +4,9 @@ set -euo pipefail
 
 readonly BRO_PROJECT_REF="gzexehiujwxfeddwsljx"
 readonly BRO_POOLER_HOST="aws-0-ap-southeast-1.pooler.supabase.com"
+readonly BRO_REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly BRO_LOCAL_CA_PATH="${BRO_REPOSITORY_ROOT}/config/certs/supabase-prod-ca-2021.crt"
+readonly BRO_RAILWAY_CA_PATH="/app/config/certs/supabase-prod-ca-2021.crt"
 
 if ! command -v railway >/dev/null 2>&1; then
   echo "Railway CLI is required." >&2
@@ -33,12 +36,17 @@ bro_encoded_password="$({
 bro_database_url="postgresql://postgres.${BRO_PROJECT_REF}:${bro_encoded_password}@${BRO_POOLER_HOST}:5432/postgres?sslmode=verify-full"
 
 echo "Verifying the Supabase Session pooler connection..."
-DATABASE_URL="${bro_database_url}" pnpm --filter @bro/db exec node --input-type=module -e '
+DATABASE_URL="${bro_database_url}" DATABASE_SSL_CA_PATH="${BRO_LOCAL_CA_PATH}" pnpm --filter @bro/db exec node --input-type=module -e '
+  import { readFileSync } from "node:fs";
   import postgres from "postgres";
   const client = postgres(process.env.DATABASE_URL, {
     max: 1,
     prepare: false,
     connect_timeout: 10,
+    ssl: {
+      ca: readFileSync(process.env.DATABASE_SSL_CA_PATH, "utf8"),
+      rejectUnauthorized: true,
+    },
   });
   try {
     await client`select 1`;
@@ -58,6 +66,8 @@ for bro_service in web worker; do
     railway variable set DATABASE_URL --stdin --service "${bro_service}" --skip-deploys --json
   printf '%s' "${bro_database_url}" |
     railway variable set DATABASE_DIRECT_URL --stdin --service "${bro_service}" --skip-deploys --json
+  printf '%s' "${BRO_RAILWAY_CA_PATH}" |
+    railway variable set DATABASE_SSL_CA_PATH --stdin --service "${bro_service}" --skip-deploys --json
 done
 
 echo "Railway database variables are configured."

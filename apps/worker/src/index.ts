@@ -4,6 +4,7 @@ import { redactSecrets } from '@bro/core';
 import {
   backgroundJobs,
   createDatabase,
+  getDatabaseSslOptions,
   platformConnections,
   publishJobs,
   socialPosts,
@@ -25,8 +26,10 @@ if (!databaseUrl) {
   );
   process.exitCode = 1;
 } else {
+  const ssl = getDatabaseSslOptions();
   const boss = new PgBoss({
     connectionString: databaseUrl,
+    ...(ssl ? { ssl } : {}),
     retryLimit: Number(process.env.WORKER_RETRY_LIMIT || 5),
     retryBackoff: true,
   });
