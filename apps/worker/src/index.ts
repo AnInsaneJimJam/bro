@@ -42,6 +42,12 @@ if (!databaseUrl) {
       Pick<JobHandlers, 'sync-content' | 'sync-comments'> | undefined;
   const names = Object.keys(jobSchemas) as JobName[];
   for (const name of names)
+    await boss.createQueue(name, {
+      name,
+      retryLimit: Number(process.env.WORKER_RETRY_LIMIT || 5),
+      retryBackoff: true,
+    });
+  for (const name of names)
     await boss.work(
       name,
       { batchSize: Number(process.env.WORKER_CONCURRENCY || 4) },
