@@ -6,6 +6,7 @@ import {
   createDatabase,
   getDatabaseSslOptions,
   platformConnections,
+  publishDestinations,
   publishJobs,
   socialPosts,
   videoProjects,
@@ -214,11 +215,13 @@ async function markDomainFailure(
             eq(videoProjects.userId, data.userId)
           )
         );
-    if (name === 'publish-video' && data.publishJobId)
+    if (name === 'publish-video' && data.publishJobId) {
+      const retryable = isRetryable(error),
+        destinationState = retryable ? 'failed_retryable' : 'failed_permanent';
       await database.db
         .update(publishJobs)
         .set({
-          state: isRetryable(error) ? 'failed_retryable' : 'failed_permanent',
+          state: destinationState,
           updatedAt: new Date(),
         })
         .where(
@@ -227,6 +230,27 @@ async function markDomainFailure(
             eq(publishJobs.userId, data.userId)
           )
         );
+      await database.db
+        .update(publishDestinations)
+        .set({
+          state: destinationState,
+          errorMessage:
+            error instanceof Error
+              ? error.message.slice(0, 500)
+              : 'Publish worker failed',
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(publishDestinations.jobId, data.publishJobId),
+            inArray(publishDestinations.state, [
+              'scheduled',
+              'processing',
+              'uploading',
+            ])
+          )
+        );
+    }
   } finally {
     await database.close();
   }
