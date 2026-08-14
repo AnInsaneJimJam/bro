@@ -156,6 +156,13 @@ describe('publishing adapters', () => {
         });
       if (url === 'https://media.test/video.mp4')
         return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+      if (url.includes('youtube/v3/videos?part=status'))
+        return new Response(
+          JSON.stringify({
+            items: [{ status: { uploadStatus: 'processed' } }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
       return new Response(JSON.stringify({ id: 'yt-published' }), {
         status: 201,
         headers: { 'content-type': 'application/json' },
@@ -171,6 +178,28 @@ describe('publishing adapters', () => {
     });
     expect(result.externalId).toBe('yt-published');
     expect(calls).toContain('https://upload.test/session');
+  });
+  it('keeps a processing YouTube upload retryable without uploading again', async () => {
+    const calls: string[] = [];
+    const http: HttpClient = async (url) => {
+      calls.push(url);
+      return new Response(
+        JSON.stringify({ items: [{ status: { uploadStatus: 'uploaded' } }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    };
+    await expect(
+      new YouTubeAdapter(async () => 'token', http).publish({
+        idempotencyKey: 'key',
+        provider: 'youtube',
+        mediaUrl: 'https://media.test/video.mp4',
+        title: 'Short',
+        mimeType: 'video/mp4',
+        contentLength: 3,
+        existingExternalId: 'yt-processing',
+      })
+    ).rejects.toMatchObject({ retryable: true, externalId: 'yt-processing' });
+    expect(calls).toHaveLength(1);
   });
   it('creates, waits for, and publishes an Instagram Reel container', async () => {
     const calls: string[] = [];

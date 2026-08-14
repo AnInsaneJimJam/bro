@@ -19,7 +19,9 @@ export class YouTubeAdapter
 {
   constructor(
     private token: Token,
-    private http: HttpClient = fetch
+    private http: HttpClient = fetch,
+    private sleep: (ms: number) => Promise<void> = (ms) =>
+      new Promise((resolve) => setTimeout(resolve, ms))
   ) {}
   private async headers() {
     return {
@@ -110,6 +112,15 @@ export class YouTubeAdapter
           externalId: input.existingExternalId,
           url: `https://youtube.com/watch?v=${input.existingExternalId}`,
         };
+      if (status === 'processing')
+        throw Object.assign(
+          new Error('YouTube is still processing the uploaded video'),
+          { retryable: true, externalId: input.existingExternalId }
+        );
+      throw Object.assign(
+        new Error('YouTube rejected the uploaded video during processing'),
+        { retryable: false, externalId: input.existingExternalId }
+      );
     }
     const validation = await this.validateMedia(input);
     if (!validation.valid) throw new Error(validation.errors.join('; '));
@@ -166,10 +177,36 @@ export class YouTubeAdapter
     const result = (await uploaded.json()) as { id: string };
     if (!result.id)
       throw new Error('YouTube upload response did not contain a video ID');
-    return {
-      externalId: result.id,
-      url: `https://youtube.com/watch?v=${result.id}`,
-    };
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let status: Awaited<ReturnType<typeof this.getPublishStatus>>;
+      try {
+        status = await this.getPublishStatus(result.id);
+      } catch (error) {
+        if (error instanceof Error) {
+          Object.assign(error, { externalId: result.id });
+          throw error;
+        }
+        throw Object.assign(
+          new Error('YouTube processing status could not be checked'),
+          { externalId: result.id, retryable: true }
+        );
+      }
+      if (status === 'published')
+        return {
+          externalId: result.id,
+          url: `https://youtube.com/watch?v=${result.id}`,
+        };
+      if (status === 'failed')
+        throw Object.assign(
+          new Error('YouTube rejected the uploaded video during processing'),
+          { retryable: false, externalId: result.id }
+        );
+      await this.sleep(Math.min(10_000, 1_000 * (attempt + 1)));
+    }
+    throw Object.assign(
+      new Error('YouTube is still processing the uploaded video'),
+      { retryable: true, externalId: result.id }
+    );
   }
   async getPublishStatus(externalId: string) {
     const result = await providerJson<{
