@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { backgroundJobs, createDatabase } from '@bro/db';
+import { eq } from 'drizzle-orm';
+import { planConnectedProviderSync, type Provider } from '@bro/core';
+import { backgroundJobs, createDatabase, platformConnections } from '@bro/db';
 import { requireUser } from '@/lib/auth';
 import { enqueueJob } from '@/lib/jobs';
 import { jsonError } from '@/lib/http';
@@ -22,14 +24,29 @@ export async function POST(request: Request) {
         queued: false,
         message: 'Demo source content is fixed and no live sync ran.',
       });
+    const database = createDatabase();
+    close = database.close;
+    const connected = await database.db
+        .select({ provider: platformConnections.provider })
+        .from(platformConnections)
+        .where(eq(platformConnections.userId, user.id)),
+      plan = planConnectedProviderSync(
+        body.providers,
+        connected.map((item) => item.provider as Provider)
+      );
+    if (!plan.providers.length)
+      throw Object.assign(
+        new Error(
+          `None of the requested providers are connected. Connect ${plan.skipped.join(', ')} first.`
+        ),
+        { status: 409 }
+      );
     const correlationId = crypto.randomUUID(),
       bossJobId = await enqueueJob(
         'sync-content',
-        { userId: user.id, providers: body.providers, correlationId },
+        { userId: user.id, providers: plan.providers, correlationId },
         { singletonKey: `sync-content:${user.id}` }
       );
-    const database = createDatabase();
-    close = database.close;
     await database.db.insert(backgroundJobs).values({
       userId: user.id,
       bossJobId,
@@ -39,7 +56,13 @@ export async function POST(request: Request) {
       correlationId,
     });
     return NextResponse.json(
-      { queued: true, bossJobId, correlationId },
+      {
+        queued: true,
+        providers: plan.providers,
+        skippedProviders: plan.skipped,
+        bossJobId,
+        correlationId,
+      },
       { status: 202 }
     );
   } catch (error) {

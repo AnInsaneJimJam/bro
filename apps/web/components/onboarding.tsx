@@ -29,6 +29,8 @@ export function Onboarding({
   const [proposalId, setProposalId] = useState('');
   const [subNiches, setSubNiches] = useState<string[]>([]);
   const [confidence, setConfidence] = useState<number | null>(null);
+  const [rationale, setRationale] = useState('');
+  const [insufficientData, setInsufficientData] = useState(false);
   const [evidence, setEvidence] = useState<
     Array<{
       platform?: string;
@@ -113,13 +115,16 @@ export function Onboarding({
     setBusy(true);
     setError('');
     try {
-      await requestJson('/api/sync/content', {
+      const result = await requestJson('/api/sync/content', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ providers }),
       });
+      const skipped = Array.isArray(result.skippedProviders)
+        ? result.skippedProviders
+        : [];
       setConnectionMessage(
-        'Account sync queued. You can infer your niche once the worker finishes.'
+        `Account sync queued for ${result.providers.join(', ')}.${skipped.length ? ` Skipped disconnected: ${skipped.join(', ')}.` : ''} You can infer your niche once the worker finishes.`
       );
       setStep(3);
     } catch (requestError) {
@@ -143,8 +148,10 @@ export function Onboarding({
         body: JSON.stringify({ action: 'infer' }),
       });
       setProposalId(proposal.id);
-      setNiche(proposal.label);
+      setInsufficientData(Boolean(proposal.insufficientData));
+      setNiche(proposal.insufficientData ? '' : proposal.label);
       setSubNiches(Array.isArray(proposal.subNiches) ? proposal.subNiches : []);
+      setRationale(proposal.rationale || '');
       setConfidence(
         typeof proposal.confidence === 'number' ? proposal.confidence : null
       );
@@ -292,6 +299,13 @@ export function Onboarding({
                 placeholder="e.g. beginner-friendly personal finance"
               />
             </label>
+            {proposalId && rationale && (
+              <p className="demo-note">
+                {insufficientData
+                  ? 'Your connected accounts do not have enough useful history yet. Tell Bro what you plan to create.'
+                  : rationale}
+              </p>
+            )}
             {confidence !== null && (
               <div className="confidence">
                 <strong>{Math.round(confidence * 100)}% confidence</strong>

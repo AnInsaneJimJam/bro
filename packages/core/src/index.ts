@@ -5,6 +5,7 @@ export * from './domain';
 export * from './idempotency';
 export * from './publishing';
 export * from './comments';
+export * from './sync';
 export const providers = z.enum(['youtube', 'instagram', 'reddit']);
 export type Provider = z.infer<typeof providers>;
 export const publishStates = z.enum([
