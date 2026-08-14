@@ -84,6 +84,7 @@ describe('uploads', () => {
         formatName: 'mov,mp4,m4a,3gp,3g2,mj2',
         videoCodec: 'h264',
         audioCodec: 'aac',
+        audioSampleRate: 48000,
       })
     ).toBe(false);
     expect(
@@ -91,10 +92,25 @@ describe('uploads', () => {
         formatName: 'matroska,webm',
         videoCodec: 'vp9',
         audioCodec: 'opus',
+        audioSampleRate: 48000,
+      })
+    ).toBe(true);
+    expect(
+      needsPublishNormalization({
+        formatName: 'mov,mp4,m4a,3gp,3g2,mj2',
+        videoCodec: 'h264',
+        audioCodec: 'aac',
+        audioSampleRate: 44100,
       })
     ).toBe(true);
     expect(normalizeVideoArgs('input.webm', 'publishable.mp4')).toEqual(
-      expect.arrayContaining(['libx264', 'aac', 'yuv420p', 'publishable.mp4'])
+      expect.arrayContaining([
+        'libx264',
+        'aac',
+        '48000',
+        'yuv420p',
+        'publishable.mp4',
+      ])
     );
   });
 });

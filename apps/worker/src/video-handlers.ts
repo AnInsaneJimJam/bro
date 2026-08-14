@@ -103,7 +103,11 @@ export function createVideoHandlers(): Pick<
             const normalizedMedia = await probeVideo(normalizedPath);
             if (
               detectedVideoMime(normalizedMedia.formatName) !== 'video/mp4' ||
-              normalizedMedia.videoCodec.toLowerCase() !== 'h264'
+              normalizedMedia.videoCodec.toLowerCase() !== 'h264' ||
+              (normalizedMedia.audioCodec &&
+                normalizedMedia.audioCodec.toLowerCase() !== 'aac') ||
+              (normalizedMedia.audioCodec &&
+                normalizedMedia.audioSampleRate !== 48000)
             )
               throw new Error('FFmpeg did not produce a compatible MP4 video');
             publishMetadata = {

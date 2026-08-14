@@ -135,6 +135,7 @@ export type ProbeMetadata = {
   height: number;
   videoCodec: string;
   audioCodec?: string;
+  audioSampleRate?: number;
   formatName: string;
 };
 export function parseFfprobe(value: unknown): ProbeMetadata {
@@ -143,6 +144,7 @@ export function parseFfprobe(value: unknown): ProbeMetadata {
     streams?: Array<{
       codec_type?: string;
       codec_name?: string;
+      sample_rate?: string;
       width?: number;
       height?: number;
     }>;
@@ -158,6 +160,7 @@ export function parseFfprobe(value: unknown): ProbeMetadata {
     height: video.height,
     videoCodec: video.codec_name || 'unknown',
     audioCodec: audio?.codec_name,
+    audioSampleRate: audio?.sample_rate ? Number(audio.sample_rate) : undefined,
     formatName: data.format?.format_name || 'unknown',
   };
 }
@@ -169,13 +172,17 @@ export function detectedVideoMime(formatName: string) {
   return 'application/octet-stream';
 }
 export function needsPublishNormalization(
-  media: Pick<ProbeMetadata, 'formatName' | 'videoCodec' | 'audioCodec'>
+  media: Pick<
+    ProbeMetadata,
+    'formatName' | 'videoCodec' | 'audioCodec' | 'audioSampleRate'
+  >
 ) {
   const formats = new Set(media.formatName.toLowerCase().split(','));
   return (
     !formats.has('mp4') ||
     media.videoCodec.toLowerCase() !== 'h264' ||
-    (!!media.audioCodec && media.audioCodec.toLowerCase() !== 'aac')
+    (!!media.audioCodec && media.audioCodec.toLowerCase() !== 'aac') ||
+    (!!media.audioCodec && media.audioSampleRate !== 48000)
   );
 }
 export function normalizeVideoArgs(input: string, output: string) {
@@ -197,6 +204,8 @@ export function normalizeVideoArgs(input: string, output: string) {
     'yuv420p',
     '-c:a',
     'aac',
+    '-ar',
+    '48000',
     '-b:a',
     '128k',
     '-movflags',
@@ -219,6 +228,8 @@ export function renderArgs(input: string, assFile: string, output: string) {
     '20',
     '-c:a',
     'aac',
+    '-ar',
+    '48000',
     '-movflags',
     '+faststart',
     output,

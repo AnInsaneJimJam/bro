@@ -51,6 +51,7 @@ describe('FFmpeg rendering integration', () => {
         height: 640,
         videoCodec: 'h264',
         audioCodec: 'aac',
+        audioSampleRate: 48000,
       });
       expect(metadata.duration).toBeGreaterThan(1);
       expect(bytes.length).toBeGreaterThan(1000);
@@ -85,6 +86,7 @@ describe('FFmpeg rendering integration', () => {
       expect(metadata).toMatchObject({
         videoCodec: 'h264',
         audioCodec: 'aac',
+        audioSampleRate: 48000,
       });
       expect(metadata.formatName.split(',')).toContain('mp4');
     } finally {
