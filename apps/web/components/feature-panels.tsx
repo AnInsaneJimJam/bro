@@ -33,6 +33,12 @@ type Script = {
   cta: string;
   version: number;
 };
+type ConnectionSummary = {
+  provider: string;
+  accountName?: string;
+  status?: string;
+  needsReauthorization?: boolean;
+};
 export function FeaturePanel({ active }: { active: string }) {
   if (active === 'Ideas') return <Ideas />;
   if (active === 'Scripts') return <Scripts />;
@@ -355,6 +361,8 @@ function Videos() {
     [status, setStatus] = useState('Loading your latest video project…'),
     [uploading, setUploading] = useState(false),
     [preview, setPreview] = useState(''),
+    [connections, setConnections] = useState<ConnectionSummary[]>([]),
+    [connectionsLoaded, setConnectionsLoaded] = useState(false),
     [youtubeEnabled, setYoutubeEnabled] = useState(true),
     [instagramEnabled, setInstagramEnabled] = useState(true),
     [youtubeTitle, setYoutubeTitle] = useState(''),
@@ -365,7 +373,13 @@ function Videos() {
     [instagramCaption, setInstagramCaption] = useState('');
   useEffect(() => {
     void loadLatestProject();
+    void loadConnections();
   }, []);
+  useEffect(() => {
+    if (!connectionsLoaded) return;
+    if (!providerReady('youtube')) setYoutubeEnabled(false);
+    if (!providerReady('instagram')) setInstagramEnabled(false);
+  }, [connectionsLoaded, connections]);
   useEffect(() => {
     if (
       !projectId ||
@@ -392,6 +406,26 @@ function Videos() {
     }
     setProjectId(latest.id);
     await refresh(latest.id);
+  }
+  async function loadConnections() {
+    try {
+      const response = await fetch('/api/connections');
+      if (!response.ok) return;
+      const data = (await response.json()) as ConnectionSummary[];
+      if (Array.isArray(data)) setConnections(data);
+    } catch {
+      // The publish API still performs the authoritative connection check.
+    } finally {
+      setConnectionsLoaded(true);
+    }
+  }
+  function providerReady(provider: 'youtube' | 'instagram') {
+    return connections.some(
+      (connection) =>
+        connection.provider === provider &&
+        connection.status === 'healthy' &&
+        !connection.needsReauthorization
+    );
   }
   async function upload(file?: File) {
     if (!file || uploading) return;
@@ -521,7 +555,11 @@ function Videos() {
       ...(instagramEnabled ? (['instagram'] as const) : []),
     ];
     if (!providers.length) {
-      setStatus('Choose YouTube, Instagram, or both.');
+      setStatus(
+        connectionsLoaded
+          ? 'Connect YouTube or Instagram before publishing.'
+          : 'Choose YouTube, Instagram, or both.'
+      );
       return;
     }
     if (youtubeEnabled && !youtubeTitle.trim()) {
@@ -626,10 +664,17 @@ function Videos() {
             <input
               type="checkbox"
               checked={youtubeEnabled}
+              disabled={connectionsLoaded && !providerReady('youtube')}
               onChange={(event) => setYoutubeEnabled(event.target.checked)}
             />{' '}
             Publish to YouTube Shorts
           </label>
+          {connectionsLoaded && !providerReady('youtube') && (
+            <small>
+              YouTube is not connected or needs attention.{' '}
+              <a href="/onboarding?step=connections">Connect YouTube</a>
+            </small>
+          )}
           {youtubeEnabled && (
             <>
               <label>
@@ -674,10 +719,17 @@ function Videos() {
             <input
               type="checkbox"
               checked={instagramEnabled}
+              disabled={connectionsLoaded && !providerReady('instagram')}
               onChange={(event) => setInstagramEnabled(event.target.checked)}
             />{' '}
             Publish to Instagram Reels
           </label>
+          {connectionsLoaded && !providerReady('instagram') && (
+            <small>
+              Instagram is not connected or needs attention.{' '}
+              <a href="/onboarding?step=connections">Connect Instagram</a>
+            </small>
+          )}
           {instagramEnabled && (
             <label>
               Instagram caption
