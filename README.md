@@ -62,7 +62,7 @@ Open `http://localhost:3000`. For a platform-free demo, retain `NEXT_PUBLIC_DEMO
 
 Set `NEXT_PUBLIC_DEMO_MODE=false` and provide these values in `.env`. Never commit that file or paste secrets into the browser:
 
-- **Gemini (preferred text/chat provider):** `GEMINI_API_KEY`. `GEMINI_TEXT_MODEL` and `GEMINI_SCRIPT_MODEL` are configurable model names, not additional keys. OpenAI remains an optional fallback for text and the separate speech/caption transcription paths.
+- **Gemini (preferred text/chat/audio-command provider):** `GEMINI_API_KEY`. `GEMINI_TEXT_MODEL`, `GEMINI_SCRIPT_MODEL`, and `GEMINI_COMMAND_TRANSCRIPTION_MODEL` are configurable model names, not additional keys. Bro converts browser WebM recordings to WAV before sending short commands to Gemini; OpenAI remains an optional fallback and is still used for word-timestamp caption transcription when that later editing slice is enabled.
 - **Supabase:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY`, plus `DATABASE_URL` and `DATABASE_DIRECT_URL` for its Postgres database.
 - **Bro security:** `TOKEN_ENCRYPTION_KEY` and `OAUTH_STATE_SECRET`, which you generate yourself; these are not third-party API keys.
 - **YouTube:** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from a Google Cloud Web OAuth client. No separate YouTube API key is needed for Bro's owned-channel, comment, and upload flows.
@@ -121,7 +121,7 @@ Set `REDDIT_INTEGRATION_ENABLED=false` until the intended use is approved under 
 
 ### AI providers
 
-Set `GEMINI_API_KEY` for live typed chat and structured text generation. OpenAI is an optional fallback for text; recorded commands use the configured speech provider and caption transcription uses `whisper-1` verbose JSON with word timestamps behind `TranscriptionProvider`.
+Set `GEMINI_API_KEY` for live typed chat, structured text generation, and recorded English command transcription. Gemini's audio generate-content path accepts short inline WAV/MP3/AAC/OGG/AIFF/FLAC input; Bro converts Chromium WebM recordings to WAV in the browser first. OpenAI is an optional fallback for text/audio; caption transcription remains behind `TranscriptionProvider` and requires a word-timestamp-capable provider when that later editing slice is enabled.
 
 ## Deployment
 

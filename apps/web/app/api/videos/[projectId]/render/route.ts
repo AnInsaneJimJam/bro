@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
-import { createDatabase, videoProjects } from '@bro/db';
+import { backgroundJobs, createDatabase, videoProjects } from '@bro/db';
 import { requireUser } from '@/lib/auth';
 import { enqueueJob } from '@/lib/jobs';
 import { jsonError } from '@/lib/http';
@@ -34,18 +34,32 @@ export async function POST(
       });
     if (project.state !== 'captions_ready' && project.state !== 'failed')
       throw new Error('Captions must be ready before rendering');
-    await database.db
-      .update(videoProjects)
-      .set({ state: 'rendering', updatedAt: new Date() })
-      .where(
-        and(eq(videoProjects.id, projectId), eq(videoProjects.userId, user.id))
-      );
     const correlationId = crypto.randomUUID(),
       bossJobId = await enqueueJob(
         'render-video',
         { userId: user.id, projectId, correlationId },
         { singletonKey: `render:${projectId}` }
       );
+    await database.db.transaction(async (tx) => {
+      await tx
+        .update(videoProjects)
+        .set({ state: 'rendering', updatedAt: new Date() })
+        .where(
+          and(
+            eq(videoProjects.id, projectId),
+            eq(videoProjects.userId, user.id)
+          )
+        );
+      await tx.insert(backgroundJobs).values({
+        userId: user.id,
+        bossJobId,
+        kind: 'render-video',
+        resourceType: 'video_project',
+        resourceId: projectId,
+        state: 'queued',
+        correlationId,
+      });
+    });
     return NextResponse.json(
       { projectId, state: 'rendering', bossJobId, correlationId },
       { status: 202 }

@@ -29,10 +29,15 @@ export async function enqueueJob(
   data: object,
   options: { singletonKey: string; startAfter?: Date }
 ) {
+  // Give the caller's database transaction time to record the application
+  // background-job row before pg-boss can deliver the message to the worker.
+  // This keeps fast local workers from completing a job before it is visible
+  // in the UI and audit tables.
+  const startAfter = options.startAfter || new Date(Date.now() + 2_000);
   return withBoss(async (boss) => {
     const id = await boss.send(name, data, {
       singletonKey: options.singletonKey,
-      startAfter: options.startAfter,
+      startAfter,
       retryLimit: Number(process.env.WORKER_RETRY_LIMIT || 5),
       retryBackoff: true,
     });

@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { FeaturePanel } from './feature-panels';
+import { encodeWav } from '@/lib/audio';
 
 const nav = [
   [Home, 'Home'],
@@ -169,11 +170,16 @@ export function Dashboard() {
       next.onstop = async () => {
         setRecording(false);
         stream.getTracks().forEach((track) => track.stop());
-        const blob = new Blob(chunks.current, {
+        const recorded = new Blob(chunks.current, {
             type: next.mimeType || 'audio/webm',
           }),
+          blob = await browserAudioForGemini(recorded),
           form = new FormData();
-        form.append('audio', blob, 'command.webm');
+        form.append(
+          'audio',
+          blob,
+          blob.type === 'audio/wav' ? 'command.wav' : 'command.webm'
+        );
         setBusy(true);
         try {
           const response = await fetch('/api/audio/transcribe', {
@@ -571,6 +577,31 @@ export function Dashboard() {
       )}
     </main>
   );
+}
+
+async function browserAudioForGemini(input: Blob) {
+  if (!input.type.toLowerCase().startsWith('audio/webm')) return input;
+  const AudioContextConstructor =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!AudioContextConstructor) return input;
+  let context: AudioContext | undefined;
+  try {
+    context = new AudioContextConstructor();
+    const decoded = await context.decodeAudioData(await input.arrayBuffer()),
+      channels = Array.from(
+        { length: Math.min(2, decoded.numberOfChannels) },
+        (_, index) => decoded.getChannelData(index)
+      );
+    return new Blob([encodeWav(channels, decoded.sampleRate)], {
+      type: 'audio/wav',
+    });
+  } catch {
+    return input;
+  } finally {
+    await context?.close().catch(() => undefined);
+  }
 }
 function EmptyPage({ active }: { active: string }) {
   return (
