@@ -3,9 +3,23 @@ import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  const [busy, setBusy] = useState(false);
+  async function passwordAuth(action: 'sign_in' | 'sign_up') {
+    setBusy(true);
+    const response = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action, email, password }),
+      }),
+      data = await response.json();
+    setBusy(false);
+    if (response.ok && data.authenticated) location.href = data.next;
+    else setMessage(data.message || data.error);
+  }
+  async function magicLink() {
+    setBusy(true);
     const response = await fetch('/api/auth/magic-link', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -13,6 +27,7 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
     });
     const data = await response.json();
     setMessage(data.message || data.error);
+    setBusy(false);
   }
   return (
     <main className="login">
@@ -26,10 +41,15 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
           in one conversation.
         </h1>
         <p>
-          Sign in with a secure email magic link. Platform passwords are never
-          requested or stored.
+          Sign in to Bro with email and password, or request a secure magic
+          link. Social-platform passwords are never requested or stored.
         </p>
-        <form onSubmit={submit}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void passwordAuth('sign_in');
+          }}
+        >
           <label>
             Email address
             <input
@@ -40,8 +60,36 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
               placeholder="you@example.com"
             />
           </label>
-          <button>
-            Send magic link <ArrowRight />
+          <label>
+            Password
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              placeholder="At least 8 characters"
+            />
+          </label>
+          <button disabled={busy}>
+            Sign in <ArrowRight />
+          </button>
+          <button
+            className="secondary-login"
+            type="button"
+            disabled={busy}
+            onClick={() => passwordAuth('sign_up')}
+          >
+            Create account
+          </button>
+          <button
+            className="secondary-login"
+            type="button"
+            disabled={busy || !email}
+            onClick={magicLink}
+          >
+            Email me a magic link
           </button>
         </form>
         {message && <div className="login-message">{message}</div>}

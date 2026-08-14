@@ -1381,6 +1381,12 @@ header p {
   background: var(--coral);
   color: #fff;
 }
+.login form .secondary-login {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  justify-content: center;
+}
 .back {
   background: #fff;
   color: var(--muted);
