@@ -16,7 +16,7 @@ describe('command resolution', () => {
     }));
   it('does not guess a publish video', () =>
     expect(resolveDemoCommand('Publish to Instagram now')).toEqual({
-      followUp: 'Which rendered video should I publish?',
+      followUp: 'Which uploaded video should I publish?',
     }));
   it('routes an explicit latest-video caption request', () =>
     expect(

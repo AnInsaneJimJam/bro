@@ -83,12 +83,12 @@ export function resolveDemoCommand(text: string): ResolvedCommand {
         followUp:
           'Which destination should I publish to: YouTube, Instagram, or both?',
       };
-    return { followUp: 'Which rendered video should I publish?' };
+    return { followUp: 'Which uploaded video should I publish?' };
   }
   if (/comments?/.test(lower))
     return { tool: 'analyze_comments', arguments: { question: value } };
   return {
     followUp:
-      'I can find your niche, discover topic opportunities, write a short script, create captions, schedule or publish a rendered video, and analyze comments. What would you like to do?',
+      'I can find your niche, discover topic opportunities, write a short script, upload and publish a video, schedule posts, and analyze comments. What would you like to do?',
   };
 }
