@@ -28,6 +28,13 @@ describe('oauth', () => {
         provider: 'youtube',
       })
     ).toThrow(/mismatch/));
+  it('rejects a state signed with a different secret', () =>
+    expect(() =>
+      verifyOAuthState(signOAuthState(payload, secret), `${secret}-different`, {
+        userId: 'user-1',
+        provider: 'youtube',
+      })
+    ).toThrow(/mismatch/));
   it('rejects unsafe return paths', () =>
     expect(() =>
       verifyOAuthState(

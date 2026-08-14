@@ -1,4 +1,9 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto';
 
 export type OAuthState = {
   userId: string;
@@ -21,9 +26,7 @@ export function signOAuthState(payload: OAuthState, secret: string) {
   if (secret.length < 32)
     throw new Error('OAuth state secret must be at least 32 characters');
   const body = encode(JSON.stringify(payload));
-  const signature = encode(
-    createHash('sha256').update(`${secret}:${body}`).digest()
-  );
+  const signature = encode(createHmac('sha256', secret).update(body).digest());
   return `${body}.${signature}`;
 }
 export function verifyOAuthState(
@@ -35,7 +38,7 @@ export function verifyOAuthState(
   const [body, signature] = state.split('.');
   if (!body || !signature) throw new Error('Invalid OAuth state');
   const expectedSignature = encode(
-    createHash('sha256').update(`${secret}:${body}`).digest()
+    createHmac('sha256', secret).update(body).digest()
   );
   const a = Buffer.from(signature),
     b = Buffer.from(expectedSignature);
