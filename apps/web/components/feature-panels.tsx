@@ -84,6 +84,11 @@ function Ideas() {
           <p>Refreshing time-bounded signals…</p>
         ) : message ? (
           <p>{message}</p>
+        ) : items.length === 0 ? (
+          <p>
+            No current opportunities. Confirm your niche, then refresh official
+            signals.
+          </p>
         ) : (
           items.map((x, i) => (
             <article key={x.id}>
@@ -351,13 +356,10 @@ function Videos() {
   };
   const input = useRef<HTMLInputElement>(null),
     video = useRef<HTMLVideoElement>(null),
-    [cues, setCues] = useState([
-      { text: 'Your AI assistant forgets everything', start: 0, end: 2.2 },
-      { text: 'and that is costing you hours.', start: 2.2, end: 4.4 },
-    ]),
-    [projectId, setProjectId] = useState('demo'),
-    [updatedAt, setUpdatedAt] = useState(new Date().toISOString()),
-    [status, setStatus] = useState('Demo captions are editable locally.'),
+    [cues, setCues] = useState<Cue[]>([]),
+    [projectId, setProjectId] = useState(''),
+    [updatedAt, setUpdatedAt] = useState(''),
+    [status, setStatus] = useState('Loading your latest video project…'),
     [preview, setPreview] = useState(''),
     [style, setStyle] = useState({
       fontSize: 58,
@@ -372,6 +374,24 @@ function Videos() {
         ? [`Cue ${i + 1} overlaps cue ${i}.`]
         : []
   );
+  useEffect(() => {
+    void loadLatestProject();
+  }, []);
+  async function loadLatestProject() {
+    const response = await fetch('/api/videos?limit=1'),
+      projects = await response.json();
+    if (!response.ok) {
+      setStatus(projects.error || 'Could not load video projects.');
+      return;
+    }
+    const latest = Array.isArray(projects) ? projects[0] : undefined;
+    if (!latest) {
+      setStatus('Upload a video to create word-timed captions.');
+      return;
+    }
+    setProjectId(latest.id);
+    await refresh(latest.id);
+  }
   async function upload(file?: File) {
     if (!file) return;
     setStatus('Requesting a private signed upload…');
@@ -427,8 +447,12 @@ function Videos() {
     if (media.ok) setPreview(signedMedia.url);
     setStatus('Queued for metadata extraction and timestamped transcription.');
   }
-  async function refresh() {
-    const r = await fetch(`/api/videos/${projectId}/captions`),
+  async function refresh(targetProjectId = projectId) {
+    if (!targetProjectId) {
+      setStatus('Upload a video first.');
+      return;
+    }
+    const r = await fetch(`/api/videos/${targetProjectId}/captions`),
       d = await r.json();
     if (!r.ok) {
       setStatus(d.error);
@@ -451,7 +475,7 @@ function Videos() {
         : `Project state: ${d.project.state}`
     );
     if (!d.demo) {
-      const media = await fetch(`/api/videos/${projectId}/media`),
+      const media = await fetch(`/api/videos/${targetProjectId}/media`),
         signed = await media.json();
       if (media.ok) setPreview(signed.url);
     }
@@ -459,6 +483,10 @@ function Videos() {
   async function save() {
     if (validation.length) {
       setStatus(validation[0]!);
+      return;
+    }
+    if (!projectId) {
+      setStatus('Upload a video first.');
       return;
     }
     if (projectId === 'demo') {
@@ -482,6 +510,10 @@ function Videos() {
   async function render() {
     if (validation.length) {
       setStatus(validation[0]!);
+      return;
+    }
+    if (!projectId) {
+      setStatus('Upload a video first.');
       return;
     }
     if (projectId === 'demo') {
@@ -555,8 +587,8 @@ function Videos() {
             </>
           )}
           <small>{status}</small>
-          {projectId !== 'demo' && (
-            <button onClick={refresh}>
+          {projectId && projectId !== 'demo' && (
+            <button onClick={() => refresh()}>
               <RefreshCw />
               Refresh captions
             </button>
