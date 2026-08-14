@@ -365,6 +365,9 @@ function Videos() {
     [instagramEnabled, setInstagramEnabled] = useState(true),
     [youtubeTitle, setYoutubeTitle] = useState(''),
     [youtubeDescription, setYoutubeDescription] = useState(''),
+    [youtubeVisibility, setYoutubeVisibility] = useState<
+      'public' | 'unlisted' | 'private'
+    >('unlisted'),
     [instagramCaption, setInstagramCaption] = useState(''),
     [style, setStyle] = useState({
       fontSize: 58,
@@ -564,7 +567,7 @@ function Videos() {
               ? {
                   title: youtubeTitle.trim(),
                   description: youtubeDescription.trim(),
-                  visibility: 'public',
+                  visibility: youtubeVisibility,
                 }
               : undefined,
             instagram: instagramEnabled
@@ -697,6 +700,23 @@ function Videos() {
                   placeholder="Description, links, and hashtags"
                 />
               </label>
+              <label>
+                YouTube visibility
+                <select
+                  value={youtubeVisibility}
+                  onChange={(event) =>
+                    setYoutubeVisibility(
+                      event.target.value as 'public' | 'unlisted' | 'private'
+                    )
+                  }
+                >
+                  <option value="unlisted">
+                    Unlisted (recommended for testing)
+                  </option>
+                  <option value="private">Private</option>
+                  <option value="public">Public</option>
+                </select>
+              </label>
             </>
           )}
           <label>
@@ -762,6 +782,9 @@ function Calendar() {
     }),
     [youtubeTitle, setYoutubeTitle] = useState(''),
     [youtubeDescription, setYoutubeDescription] = useState(''),
+    [youtubeVisibility, setYoutubeVisibility] = useState<
+      'public' | 'unlisted' | 'private'
+    >('unlisted'),
     [instagramCaption, setInstagramCaption] = useState(''),
     [message, setMessage] = useState('');
   async function load() {
@@ -820,7 +843,7 @@ function Calendar() {
               ? {
                   title: youtubeTitle.trim(),
                   description: youtubeDescription.trim(),
-                  visibility: 'public',
+                  visibility: youtubeVisibility,
                 }
               : undefined,
             instagram: destinations.instagram
@@ -1024,6 +1047,25 @@ function Calendar() {
               onChange={(event) => setYoutubeDescription(event.target.value)}
               placeholder="Description and hashtags"
             />
+          </label>
+        )}
+        {destinations.youtube && (
+          <label>
+            YouTube visibility
+            <select
+              value={youtubeVisibility}
+              onChange={(event) =>
+                setYoutubeVisibility(
+                  event.target.value as 'public' | 'unlisted' | 'private'
+                )
+              }
+            >
+              <option value="unlisted">
+                Unlisted (recommended for testing)
+              </option>
+              <option value="private">Private</option>
+              <option value="public">Public</option>
+            </select>
           </label>
         )}
         {destinations.instagram && (
