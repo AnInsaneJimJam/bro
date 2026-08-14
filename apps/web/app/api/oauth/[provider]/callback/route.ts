@@ -103,6 +103,16 @@ export async function GET(
       new URL(payload.returnTo, process.env.NEXT_PUBLIC_APP_URL)
     );
   } catch (e) {
+    const safeMessage =
+      e instanceof Error ? e.message.slice(0, 240) : 'OAuth connection failed';
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      const fallback = new URL(
+        '/onboarding?step=connections',
+        process.env.NEXT_PUBLIC_APP_URL
+      );
+      fallback.searchParams.set('oauth_error', safeMessage);
+      return NextResponse.redirect(fallback);
+    }
     return jsonError(e);
   } finally {
     await close?.();

@@ -18,9 +18,11 @@ const countries = [
 export function Onboarding({
   initialStep = 1,
   demoMode = false,
+  initialError = '',
 }: {
   initialStep?: number;
   demoMode?: boolean;
+  initialError?: string;
 }) {
   const [step, setStep] = useState(initialStep);
   const [name, setName] = useState('Creator');
@@ -45,7 +47,7 @@ export function Onboarding({
   const [saved, setSaved] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
 
   useEffect(() => {
     if (!demoMode) void refreshConnections();
