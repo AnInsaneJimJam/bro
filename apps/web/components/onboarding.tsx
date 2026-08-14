@@ -39,7 +39,12 @@ export function Onboarding({
     }>
   >([]);
   const [connections, setConnections] = useState<
-    Array<{ provider: string; accountName?: string; status?: string }>
+    Array<{
+      provider: string;
+      accountName?: string;
+      status?: string;
+      needsReauthorization?: boolean;
+    }>
   >([]);
   const [saved, setSaved] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
@@ -419,7 +424,11 @@ function Connection({
   icon: React.ReactNode;
   onDemo: (message: string) => void;
   demoMode: boolean;
-  connection?: { accountName?: string; status?: string };
+  connection?: {
+    accountName?: string;
+    status?: string;
+    needsReauthorization?: boolean;
+  };
 }) {
   return (
     <div className="connect-row">
@@ -429,7 +438,7 @@ function Connection({
         <small>{note}</small>
       </span>
       <button
-        disabled={Boolean(connection)}
+        disabled={Boolean(connection && !connection.needsReauthorization)}
         onClick={() => {
           if (demoMode)
             onDemo(
@@ -438,9 +447,11 @@ function Connection({
           else window.location.href = `/api/oauth/${provider}/start`;
         }}
       >
-        {connection
+        {connection && !connection.needsReauthorization
           ? `Connected · ${connection.accountName || name}`
-          : 'Connect'}
+          : connection
+            ? 'Reconnect'
+            : 'Connect'}
       </button>
     </div>
   );

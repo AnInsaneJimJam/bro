@@ -1,4 +1,26 @@
 export type OAuthProvider = 'youtube' | 'instagram' | 'reddit';
+export const requiredProviderScopes: Record<OAuthProvider, string[]> = {
+  youtube: [
+    'https://www.googleapis.com/auth/youtube.upload',
+    'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/youtube.force-ssl',
+  ],
+  instagram: [
+    'instagram_business_basic',
+    'instagram_business_content_publish',
+    'instagram_business_manage_comments',
+  ],
+  reddit: [],
+};
+export function missingProviderScopes(
+  provider: OAuthProvider,
+  scopes: readonly string[] | null | undefined
+) {
+  const granted = new Set(scopes || []);
+  return requiredProviderScopes[provider].filter(
+    (scope) => !granted.has(scope)
+  );
+}
 export function oauthAuthorizationUrl(
   provider: OAuthProvider,
   input: { state: string; challenge: string }

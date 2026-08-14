@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { jsonError } from '@/lib/http';
+import { requiredProviderScopes } from '@/lib/oauth-config';
 
 type Check = {
   key: string;
@@ -50,11 +51,7 @@ export async function GET() {
         'YouTube OAuth',
         ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI'],
         'GOOGLE_SCOPES',
-        [
-          'https://www.googleapis.com/auth/youtube.upload',
-          'https://www.googleapis.com/auth/youtube.readonly',
-          'https://www.googleapis.com/auth/youtube.force-ssl',
-        ],
+        requiredProviderScopes.youtube,
         'YouTube connection and publishing can be attempted.'
       ),
       providerScopeCheck(
@@ -62,11 +59,7 @@ export async function GET() {
         'Instagram OAuth',
         ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET', 'INSTAGRAM_REDIRECT_URI'],
         'INSTAGRAM_SCOPES',
-        [
-          'instagram_business_basic',
-          'instagram_business_content_publish',
-          'instagram_business_manage_comments',
-        ],
+        requiredProviderScopes.instagram,
         'Instagram connection can be attempted; account eligibility and review still apply.'
       ),
       {

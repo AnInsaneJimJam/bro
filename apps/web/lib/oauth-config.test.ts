@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { oauthAuthorizationUrl } from './oauth-config';
+import { missingProviderScopes, oauthAuthorizationUrl } from './oauth-config';
 
 const original = { ...process.env };
 afterEach(() => {
@@ -7,6 +7,20 @@ afterEach(() => {
 });
 
 describe('OAuth provider configuration', () => {
+  it('identifies provider connections missing required scopes', () => {
+    expect(
+      missingProviderScopes('youtube', [
+        'https://www.googleapis.com/auth/youtube.upload',
+      ])
+    ).toContain('https://www.googleapis.com/auth/youtube.force-ssl');
+    expect(
+      missingProviderScopes('instagram', [
+        'instagram_business_basic',
+        'instagram_business_content_publish',
+        'instagram_business_manage_comments',
+      ])
+    ).toEqual([]);
+  });
   it('fails closed when a required YouTube redirect is missing', () => {
     process.env.GOOGLE_CLIENT_ID = 'client';
     process.env.GOOGLE_SCOPES = 'scope';

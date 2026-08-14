@@ -10,6 +10,7 @@ import {
 import { revokeProviderToken } from '@bro/integrations';
 import { requireUser } from '@/lib/auth';
 import { jsonError } from '@/lib/http';
+import { missingProviderScopes, type OAuthProvider } from '@/lib/oauth-config';
 export async function GET() {
   let close: (() => Promise<void>) | undefined;
   try {
@@ -37,7 +38,15 @@ export async function GET() {
       ]);
     const database = createDatabase();
     close = database.close;
-    return NextResponse.json(await listConnections(database.db, user.id));
+    const rows = await listConnections(database.db, user.id);
+    return NextResponse.json(
+      rows.map((row) => ({
+        ...row,
+        needsReauthorization:
+          missingProviderScopes(row.provider as OAuthProvider, row.scopes)
+            .length > 0,
+      }))
+    );
   } catch (e) {
     return jsonError(e);
   } finally {

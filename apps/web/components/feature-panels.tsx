@@ -1324,6 +1324,7 @@ function Connections() {
     provider: 'youtube' | 'instagram' | 'reddit';
     accountName?: string;
     status: string;
+    needsReauthorization?: boolean;
     lastSyncAt?: string;
     demo?: boolean;
   };
@@ -1385,7 +1386,9 @@ function Connections() {
             name = provider.charAt(0).toUpperCase() + provider.slice(1),
             status = connection?.demo
               ? 'Demo data'
-              : connection?.status || 'Disconnected';
+              : connection?.needsReauthorization
+                ? 'Reconnect required'
+                : connection?.status || 'Disconnected';
           return (
             <article key={provider}>
               <div className="platform-letter">{name.charAt(0)}</div>
