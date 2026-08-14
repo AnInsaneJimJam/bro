@@ -14,6 +14,7 @@ import { jobSchemas, type JobHandlers, type JobName } from './jobs';
 import { createVideoHandlers } from './video-handlers';
 import { createPublishHandler } from './publish-handler';
 import { createSyncHandlers } from './sync-handlers';
+import { pgBossConnectionString } from './database-url';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -28,7 +29,7 @@ if (!databaseUrl) {
 } else {
   const ssl = getDatabaseSslOptions();
   const boss = new PgBoss({
-    connectionString: databaseUrl,
+    connectionString: pgBossConnectionString(databaseUrl, Boolean(ssl)),
     ...(ssl ? { ssl } : {}),
     retryLimit: Number(process.env.WORKER_RETRY_LIMIT || 5),
     retryBackoff: true,
