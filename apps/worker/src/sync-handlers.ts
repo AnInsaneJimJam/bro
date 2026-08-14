@@ -12,6 +12,7 @@ import {
   YouTubeAdapter,
   type CommentAdapter,
   type ContentSourceAdapter,
+  type NormalizedContentItem,
 } from '@bro/integrations';
 import type { JobHandlers } from './jobs';
 import { accessToken } from './provider-token';
@@ -71,38 +72,60 @@ export function createSyncHandlers(): Pick<
             connectionId: row.providerAccountId,
             limit: 50,
           });
-          if (items.length)
-            await database.db
-              .insert(creatorContentItems)
-              .values(
-                items.map((item) => ({
-                  userId,
-                  provider: item.provider,
-                  providerId: item.externalId,
-                  title: item.title,
-                  body: item.text,
-                  metrics: item.metrics,
-                  publishedAt: new Date(item.publishedAt),
-                  canonicalUrl: item.url,
-                  syncedAt: new Date(),
-                }))
-              )
-              .onConflictDoUpdate({
-                target: [
-                  creatorContentItems.userId,
-                  creatorContentItems.provider,
-                  creatorContentItems.providerId,
-                ],
-                set: {
-                  title: sql`excluded.title`,
-                  body: sql`excluded.body`,
-                  metrics: sql`excluded.metrics`,
-                  publishedAt: sql`excluded.published_at`,
-                  canonicalUrl: sql`excluded.canonical_url`,
-                  syncedAt: sql`excluded.synced_at`,
-                  updatedAt: new Date(),
-                },
-              });
+          if (items.length) {
+            const syncedAt = new Date();
+            await database.db.transaction(async (tx) => {
+              await tx
+                .insert(creatorContentItems)
+                .values(
+                  items.map((item) => ({
+                    userId,
+                    provider: item.provider,
+                    providerId: item.externalId,
+                    title: item.title,
+                    body: item.text,
+                    metrics: item.metrics,
+                    publishedAt: new Date(item.publishedAt),
+                    canonicalUrl: item.url,
+                    syncedAt,
+                  }))
+                )
+                .onConflictDoUpdate({
+                  target: [
+                    creatorContentItems.userId,
+                    creatorContentItems.provider,
+                    creatorContentItems.providerId,
+                  ],
+                  set: {
+                    title: sql`excluded.title`,
+                    body: sql`excluded.body`,
+                    metrics: sql`excluded.metrics`,
+                    publishedAt: sql`excluded.published_at`,
+                    canonicalUrl: sql`excluded.canonical_url`,
+                    syncedAt: sql`excluded.synced_at`,
+                    updatedAt: syncedAt,
+                  },
+                });
+              const ownedPosts = ownedSocialPostValues(userId, items, syncedAt);
+              if (ownedPosts.length)
+                await tx
+                  .insert(socialPosts)
+                  .values(ownedPosts)
+                  .onConflictDoUpdate({
+                    target: [
+                      socialPosts.userId,
+                      socialPosts.provider,
+                      socialPosts.providerMediaId,
+                    ],
+                    set: {
+                      canonicalUrl: sql`excluded.canonical_url`,
+                      publishedAt: sql`excluded.published_at`,
+                      metrics: sql`excluded.metrics`,
+                      updatedAt: syncedAt,
+                    },
+                  });
+            });
+          }
           await database.db
             .update(platformConnections)
             .set({
@@ -188,4 +211,24 @@ export function createSyncHandlers(): Pick<
       return summary;
     },
   };
+}
+
+export function ownedSocialPostValues(
+  userId: string,
+  items: NormalizedContentItem[],
+  syncedAt: Date
+) {
+  return items
+    .filter(
+      (item) => item.provider === 'youtube' || item.provider === 'instagram'
+    )
+    .map((item) => ({
+      userId,
+      provider: item.provider,
+      providerMediaId: item.externalId,
+      canonicalUrl: item.url,
+      publishedAt: new Date(item.publishedAt),
+      metrics: item.metrics,
+      updatedAt: syncedAt,
+    }));
 }
