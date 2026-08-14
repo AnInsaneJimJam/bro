@@ -1,6 +1,11 @@
 import PgBoss from 'pg-boss';
-import { and, eq, gt, inArray } from 'drizzle-orm';
-import { redactSecrets } from '@bro/core';
+import { and, eq, gt, inArray, lt } from 'drizzle-orm';
+import {
+  aggregateDestinationState,
+  redactSecrets,
+  reconcileStalePublishDestinations,
+  type Destination,
+} from '@bro/core';
 import {
   backgroundJobs,
   createDatabase,
@@ -119,6 +124,33 @@ if (!databaseUrl) {
     { correlationId: 'scheduled-comment-refresh' },
     { tz: 'UTC' }
   );
+  await reconcileStalePublishJobs().catch((error) => {
+    console.warn(
+      JSON.stringify(
+        redactSecrets({
+          level: 'warn',
+          service: 'bro-worker',
+          message: 'Initial publish reconciliation failed',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      )
+    );
+  });
+  const reconcileInterval = setInterval(() => {
+    void reconcileStalePublishJobs().catch((error) => {
+      console.warn(
+        JSON.stringify(
+          redactSecrets({
+            level: 'warn',
+            service: 'bro-worker',
+            message: 'Publish reconciliation failed',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })
+        )
+      );
+    });
+  }, reconcileIntervalMs());
+  reconcileInterval.unref?.();
   console.log(
     JSON.stringify({
       level: 'info',
@@ -128,11 +160,141 @@ if (!databaseUrl) {
     })
   );
   const stop = async () => {
+    clearInterval(reconcileInterval);
     await boss.stop({ graceful: true });
     process.exit(0);
   };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
+}
+
+function stalePublishAfterMs() {
+  const seconds = Number(process.env.PUBLISH_STALE_AFTER_SECONDS || 1800);
+  return Math.max(60, Number.isFinite(seconds) ? seconds : 1800) * 1000;
+}
+
+function reconcileIntervalMs() {
+  const seconds = Number(process.env.PUBLISH_RECONCILE_INTERVAL_SECONDS || 300);
+  return Math.max(30, Number.isFinite(seconds) ? seconds : 300) * 1000;
+}
+
+async function reconcileStalePublishJobs() {
+  const database = createDatabase();
+  try {
+    const cutoff = new Date(Date.now() - stalePublishAfterMs());
+    const staleJobs = await database.db
+      .select({ id: publishJobs.id })
+      .from(publishJobs)
+      .where(
+        and(
+          inArray(publishJobs.state, ['processing', 'uploading']),
+          lt(publishJobs.updatedAt, cutoff)
+        )
+      );
+    if (!staleJobs.length) return 0;
+
+    const jobIds = staleJobs.map((job) => job.id);
+    const rows = await database.db
+      .select()
+      .from(publishDestinations)
+      .where(inArray(publishDestinations.jobId, jobIds));
+    const rowsByJob = new Map<string, typeof rows>();
+    for (const row of rows) {
+      if (!row.jobId) continue;
+      const values = rowsByJob.get(row.jobId) || [];
+      values.push(row);
+      rowsByJob.set(row.jobId, values);
+    }
+    let recovered = 0;
+    for (const job of staleJobs) {
+      const jobRows = rowsByJob.get(job.id) || [];
+      if (!jobRows.length) continue;
+      const destinations: Destination[] = jobRows.map((row) => ({
+        provider: row.provider as Destination['provider'],
+        state: row.state as Destination['state'],
+        attempts: row.attemptCount || 0,
+        externalId: row.externalId || undefined,
+        url: row.url || undefined,
+        error: row.errorMessage || undefined,
+      }));
+      reconcileStalePublishDestinations(destinations);
+      const state = aggregateDestinationState(destinations);
+      const now = new Date();
+      const claimed = await database.db.transaction(async (tx) => {
+        const [stale] = await tx
+          .update(publishJobs)
+          .set({ state, updatedAt: now })
+          .where(
+            and(
+              eq(publishJobs.id, job.id),
+              inArray(publishJobs.state, ['processing', 'uploading']),
+              lt(publishJobs.updatedAt, cutoff)
+            )
+          )
+          .returning({ id: publishJobs.id });
+        if (!stale) return false;
+        await tx
+          .update(publishDestinations)
+          .set({
+            state: 'failed_retryable',
+            errorCode: 'PUBLISH_STALE',
+            errorMessage:
+              'The publish worker stopped before this destination completed. Retry is safe.',
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(publishDestinations.jobId, job.id),
+              inArray(publishDestinations.state, [
+                'scheduled',
+                'processing',
+                'uploading',
+              ])
+            )
+          );
+        await tx
+          .update(backgroundJobs)
+          .set({
+            state:
+              state === 'published' ||
+              state === 'cancelled' ||
+              state === 'failed_permanent'
+                ? 'completed'
+                : 'failed_retryable',
+            lastErrorCode:
+              state === 'published' || state === 'cancelled'
+                ? null
+                : 'PUBLISH_STALE',
+            lastErrorMessage:
+              state === 'published' || state === 'cancelled'
+                ? null
+                : 'The publish worker stopped before this job completed. Retry is safe.',
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(backgroundJobs.resourceId, job.id),
+              eq(backgroundJobs.kind, 'publish-video'),
+              inArray(backgroundJobs.state, ['queued', 'processing'])
+            )
+          );
+        return true;
+      });
+      if (claimed) recovered++;
+    }
+    if (recovered)
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          service: 'bro-worker',
+          message: 'Recovered stale publish jobs',
+          count: recovered,
+        })
+      );
+    return recovered;
+  } finally {
+    await database.close();
+  }
 }
 
 async function enqueueRecentCommentRefreshes(boss: PgBoss) {

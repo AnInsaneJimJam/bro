@@ -58,6 +58,28 @@ export function retryableDestinations(destinations: Destination[]) {
     .filter((d) => d.state === 'failed_retryable')
     .map((d) => d.provider);
 }
+
+/**
+ * Recover a publish job whose worker disappeared while an external upload was
+ * in flight. Only non-terminal destinations are made retryable; a destination
+ * that already has a terminal result is never rolled back.
+ */
+export function reconcileStalePublishDestinations(
+  destinations: Destination[]
+): Destination[] {
+  for (const destination of destinations) {
+    if (
+      destination.state === 'scheduled' ||
+      destination.state === 'processing' ||
+      destination.state === 'uploading'
+    ) {
+      destination.state = 'failed_retryable';
+      destination.error =
+        'The publish worker stopped before this destination completed. Retry is safe.';
+    }
+  }
+  return destinations;
+}
 export type ConfirmationCard = {
   projectId: string;
   mediaName: string;

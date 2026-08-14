@@ -170,6 +170,10 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
                 eq(publishDestinations.provider, destination.provider)
               )
             );
+          await database.db
+            .update(publishJobs)
+            .set({ updatedAt: new Date() })
+            .where(eq(publishJobs.id, job.id));
         },
       });
       await database.db.transaction(async (tx) => {
