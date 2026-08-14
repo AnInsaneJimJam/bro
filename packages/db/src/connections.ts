@@ -65,6 +65,7 @@ export async function listConnections(db: ReturnTypeDatabase, userId: string) {
       scopes: platformConnections.scopes,
       expiresAt: platformConnections.expiresAt,
       lastSyncAt: platformConnections.lastSyncAt,
+      metadata: platformConnections.metadata,
     })
     .from(platformConnections)
     .where(eq(platformConnections.userId, userId));

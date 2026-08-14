@@ -1216,6 +1216,7 @@ function Connections() {
     provider: 'youtube' | 'instagram' | 'reddit';
     accountName?: string;
     status: string;
+    lastError?: string;
     needsReauthorization?: boolean;
     lastSyncAt?: string;
     demo?: boolean;
@@ -1254,11 +1255,48 @@ function Connections() {
         body: JSON.stringify({ providers: [provider] }),
       }),
       data = await response.json();
-    setMessage(
-      response.ok
-        ? `${provider} content sync queued. Refresh this page shortly to see its latest status.`
-        : data.error
-    );
+    if (!response.ok) {
+      setMessage(data.error);
+      return;
+    }
+    if (!data.bossJobId) {
+      setMessage(`${provider} content sync queued.`);
+      return;
+    }
+    setMessage(`${provider} content sync queued…`);
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const statusResponse = await fetch(
+        `/api/sync/content/status?bossJobId=${encodeURIComponent(data.bossJobId)}`
+      );
+      const statusData = await statusResponse.json();
+      if (!statusResponse.ok) {
+        setMessage(
+          statusData.error || `${provider} sync status is unavailable.`
+        );
+        return;
+      }
+      if (statusData.state === 'completed') {
+        setMessage(`${provider} content sync completed.`);
+        await load();
+        return;
+      }
+      if (
+        statusData.state === 'failed_retryable' ||
+        statusData.state === 'failed_permanent'
+      ) {
+        setMessage(
+          statusData.lastErrorMessage ||
+            `${provider} content sync failed. Reconnect and try again.`
+        );
+        await load();
+        return;
+      }
+      setMessage(
+        `${provider} content sync ${statusData.state || 'processing'}…`
+      );
+    }
+    setMessage(`${provider} content sync is still running. Refresh later.`);
   }
   const notes = {
     youtube: 'Owned Shorts, uploads and comments',
@@ -1297,6 +1335,7 @@ function Connections() {
                     ? ` · synced ${new Date(connection.lastSyncAt).toLocaleString()}`
                     : ''}
                 </p>
+                {connection?.lastError && <small>{connection.lastError}</small>}
               </div>
               <span
                 className={status === 'healthy' ? 'healthy' : 'demo-status'}

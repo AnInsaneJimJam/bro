@@ -43,6 +43,7 @@ export function Onboarding({
       provider: string;
       accountName?: string;
       status?: string;
+      lastError?: string;
       needsReauthorization?: boolean;
     }>
   >([]);
@@ -498,6 +499,7 @@ function Connection({
   connection?: {
     accountName?: string;
     status?: string;
+    lastError?: string;
     needsReauthorization?: boolean;
   };
 }) {
@@ -507,12 +509,13 @@ function Connection({
       <span>
         <strong>{name}</strong>
         <small>{note}</small>
+        {connection?.lastError && <small>{connection.lastError}</small>}
       </span>
       <button
         disabled={Boolean(
           connection &&
-            connection.status === 'healthy' &&
-            !connection.needsReauthorization
+          connection.status === 'healthy' &&
+          !connection.needsReauthorization
         )}
         onClick={() => {
           if (demoMode)

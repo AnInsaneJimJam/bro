@@ -40,12 +40,20 @@ export async function GET() {
     close = database.close;
     const rows = await listConnections(database.db, user.id);
     return NextResponse.json(
-      rows.map((row) => ({
-        ...row,
-        needsReauthorization:
-          missingProviderScopes(row.provider as OAuthProvider, row.scopes)
-            .length > 0,
-      }))
+      rows.map((row) => {
+        const { metadata, ...safe } = row;
+        return {
+          ...safe,
+          lastError:
+            metadata &&
+            typeof (metadata as { lastError?: unknown }).lastError === 'string'
+              ? (metadata as { lastError: string }).lastError.slice(0, 300)
+              : undefined,
+          needsReauthorization:
+            missingProviderScopes(safe.provider as OAuthProvider, safe.scopes)
+              .length > 0,
+        };
+      })
     );
   } catch (e) {
     return jsonError(e);
