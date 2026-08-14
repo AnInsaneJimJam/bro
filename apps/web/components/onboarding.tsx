@@ -57,8 +57,22 @@ export function Onboarding({
     : [country, ...filteredCountries];
 
   useEffect(() => {
+    void loadProfile();
     if (!demoMode) void refreshConnections();
   }, [demoMode]);
+
+  async function loadProfile() {
+    try {
+      const profile = await requestJson('/api/profile');
+      if (profile.displayName) setName(profile.displayName);
+      const savedCountry = countries.find(
+        (item) => item.code === profile.countryCode
+      );
+      if (savedCountry) setCountry(savedCountry);
+    } catch {
+      // A new account has no profile yet; the first onboarding step creates it.
+    }
+  }
 
   async function requestJson(url: string, init?: RequestInit) {
     const response = await fetch(url, init);
