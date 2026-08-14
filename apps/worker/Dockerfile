@@ -3,4 +3,4 @@ RUN corepack enable && apt-get update && apt-get install -y ffmpeg && rm -rf /va
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile=false && pnpm --filter @bro/worker build
-CMD ["node","apps/worker/dist/index.js"]
+CMD ["pnpm","--filter","@bro/worker","exec","node","--import","tsx","src/index.ts"]
