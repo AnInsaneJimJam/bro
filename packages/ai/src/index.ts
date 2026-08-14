@@ -3,7 +3,12 @@ export * from './command';
 export * from './transcription';
 export * from './text-provider';
 const id = z.string().uuid();
-const providers = z.array(z.enum(['youtube', 'instagram'])).min(1);
+const providers = z
+  .array(z.enum(['youtube', 'instagram']))
+  .min(1)
+  .refine((items) => new Set(items).size === items.length, {
+    message: 'Each publishing destination may be selected only once.',
+  });
 const publishMetadata = z.object({
   youtube: z
     .object({

@@ -37,4 +37,20 @@ describe('publishing policy', () => {
     expect(aggregateDestinationState(destinations)).toBe('partially_published');
     expect(retryableDestinations(destinations)).toEqual(['instagram']);
   });
+  it('keeps a cancelled job terminal when a queued worker arrives late', () => {
+    expect(
+      aggregateDestinationState([
+        { provider: 'youtube', state: 'cancelled', attempts: 0 },
+        { provider: 'instagram', state: 'cancelled', attempts: 0 },
+      ])
+    ).toBe('cancelled');
+  });
+  it('reports published plus cancelled destinations as partial success', () => {
+    expect(
+      aggregateDestinationState([
+        { provider: 'youtube', state: 'published', attempts: 1 },
+        { provider: 'instagram', state: 'cancelled', attempts: 0 },
+      ])
+    ).toBe('partially_published');
+  });
 });

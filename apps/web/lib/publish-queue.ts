@@ -20,6 +20,10 @@ export async function queuePublish(
   }
 ) {
   const correlationId = crypto.randomUUID(),
+    // pg-boss delivery can begin immediately. Give the state/background-job
+    // transaction a short head start so confirm/retry paths cannot be raced
+    // by a worker observing their pre-queue destination state.
+    startAfter = input.startAfter || new Date(Date.now() + 2_000),
     bossJobId = await enqueueJob(
       'publish-video',
       {
@@ -28,7 +32,7 @@ export async function queuePublish(
         providers: input.providers,
         correlationId,
       },
-      { singletonKey: `publish:${input.jobId}`, startAfter: input.startAfter }
+      { singletonKey: `publish:${input.jobId}`, startAfter }
     );
   await database.db.transaction(async (tx) => {
     await tx

@@ -23,16 +23,24 @@ const provider = z.enum(['youtube', 'instagram']);
 const metadataSchema = z.object({
   youtube: z
     .object({
-      title: z.string().min(1),
-      description: z.string().default(''),
+      title: z.string().min(1).max(100),
+      description: z.string().max(5000).default(''),
       visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
     })
     .optional(),
-  instagram: z.object({ caption: z.string().default('') }).optional(),
+  instagram: z
+    .object({ caption: z.string().max(2200).default('') })
+    .optional(),
 });
 const input = z.object({
   projectId: z.string().uuid(),
-  providers: z.array(provider).min(1).max(2),
+  providers: z
+    .array(provider)
+    .min(1)
+    .max(2)
+    .refine((items) => new Set(items).size === items.length, {
+      message: 'Each publishing destination may be selected only once.',
+    }),
   mode: z.enum(['now', 'schedule']),
   localDateTime: z.string().optional(),
   timeZone: z.string().min(3).optional(),

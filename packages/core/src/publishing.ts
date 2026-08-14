@@ -37,10 +37,13 @@ export function aggregateDestinationState(
       new Error('A publish job must contain at least one destination'),
       { code: 'PUBLISH_DESTINATIONS_EMPTY', retryable: false }
     );
+  if (destinations.every((d) => d.state === 'cancelled')) return 'cancelled';
   if (destinations.every((d) => d.state === 'published')) return 'published';
   if (
     destinations.some((d) => d.state === 'published') &&
-    destinations.some((d) => d.state.startsWith('failed'))
+    destinations.some(
+      (d) => d.state.startsWith('failed') || d.state === 'cancelled'
+    )
   )
     return 'partially_published';
   if (destinations.some((d) => d.state === 'failed_retryable'))
