@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   CalendarDays,
-  Captions,
   Check,
   FileText,
   Instagram,
@@ -11,6 +10,7 @@ import {
   Play,
   ShieldCheck,
   UserRound,
+  Upload,
   Youtube,
 } from 'lucide-react';
 import { isDemoMode } from '@/lib/auth';
@@ -30,9 +30,9 @@ const workflow = [
   },
   {
     number: '03',
-    title: 'Caption the video',
-    body: 'Word-timed captions with a clean editor and burn-in render.',
-    icon: <Captions />,
+    title: 'Upload once',
+    body: 'Validate the original video and prepare platform-specific metadata.',
+    icon: <Upload />,
   },
   {
     number: '04',
@@ -75,8 +75,8 @@ export function LandingPage() {
             workflow, handled<span>.</span>
           </h1>
           <p>
-            Find the right idea, write the script, caption the video, schedule
-            the post, and understand the comments — all by talking to Bro.
+            Find the right idea, write the script, upload once, schedule the
+            post, and understand the comments — all by talking to Bro.
           </p>
           <div className="landing-hero-actions">
             <a className="landing-button primary large" href={connectHref}>
@@ -110,7 +110,7 @@ export function LandingPage() {
               <FileText /> Scripts
             </b>
             <b>
-              <Captions /> Captions
+              <Upload /> Upload
             </b>
             <b>
               <CalendarDays /> Schedule
@@ -137,9 +137,9 @@ export function LandingPage() {
                     <small>Contrarian hook · 45 seconds</small>
                   </span>
                   <span>
-                    <Captions />
-                    <b>Captions</b>
-                    <small>Editable word-timed cues</small>
+                    <Upload />
+                    <b>Video</b>
+                    <small>Validated original upload</small>
                   </span>
                   <span>
                     <CalendarDays />
@@ -191,16 +191,16 @@ export function LandingPage() {
           <div className="caption-fragment">
             <div className="vertical-video">
               <div>
-                Your AI assistant
+                Original video
                 <br />
-                forgets everything.
+                ready to publish.
               </div>
             </div>
             <div className="caption-timeline">
               <i />
-              <span>Your AI assistant</span>
-              <span>forgets everything</span>
-              <span>here’s the fix</span>
+              <span>YouTube title + description</span>
+              <span>Instagram caption</span>
+              <span>Unlisted test publish</span>
             </div>
           </div>
           <div className="schedule-fragment">
