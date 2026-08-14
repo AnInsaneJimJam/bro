@@ -132,6 +132,28 @@ describe('official adapters', () => {
       retryable: true,
     });
   });
+  it('skips a YouTube video with comments disabled during comment sync', async () => {
+    const calls: string[] = [];
+    const adapter = new YouTubeAdapter(
+      async () => 'token',
+      async (url) => {
+        calls.push(url);
+        return json(
+          {
+            error: {
+              errors: [{ reason: 'commentsDisabled' }],
+              code: 403,
+            },
+          },
+          403
+        );
+      }
+    );
+    await expect(
+      adapter.syncOwnedMediaComments({ mediaIds: ['comments-off'] })
+    ).resolves.toEqual([]);
+    expect(calls[0]).toContain('textFormat=plainText');
+  });
   it('redacts provider payloads and honors retry-after guidance', async () => {
     const adapter = new YouTubeAdapter(
       async () => 'token',

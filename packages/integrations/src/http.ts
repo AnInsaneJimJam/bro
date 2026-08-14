@@ -43,7 +43,9 @@ export async function providerError(
     code,
     message,
     retryable,
-    retryAfterMs
+    retryAfterMs,
+    reason,
+    response.status
   );
 }
 

@@ -240,9 +240,21 @@ export class YouTubeAdapter
       }>(
         'youtube',
         this.http,
-        `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${encodeURIComponent(mediaId)}&maxResults=100`,
+        `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${encodeURIComponent(mediaId)}&maxResults=100&textFormat=plainText`,
         { headers: await this.headers() }
-      );
+      ).catch((error) => {
+        // A creator can disable comments on an individual video. Treat that
+        // media item as an empty comment set while preserving other videos and
+        // still surfacing authorization/quota failures to the job boundary.
+        if (
+          error instanceof Error &&
+          /\bcommentsDisabled\b/.test(
+            String((error as { reason?: unknown }).reason || '')
+          )
+        )
+          return { items: [] };
+        throw error;
+      });
       for (const item of data.items)
         output.push({
           externalId: item.snippet.topLevelComment.id,

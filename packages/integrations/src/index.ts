@@ -117,7 +117,9 @@ export class ProviderUnavailableError extends Error {
     public code: string,
     message: string,
     public retryable = false,
-    public retryAfterMs?: number
+    public retryAfterMs?: number,
+    public reason?: string,
+    public httpStatus?: number
   ) {
     super(message);
     this.name = 'ProviderUnavailableError';
