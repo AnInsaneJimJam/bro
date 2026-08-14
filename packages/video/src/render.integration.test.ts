@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { captionsToAss, probeVideo, renderArgs, runFfmpeg } from './index';
+import {
+  captionsToAss,
+  normalizeVideoArgs,
+  probeVideo,
+  renderArgs,
+  runFfmpeg,
+} from './index';
 
 const execute = promisify(execFile);
 describe('FFmpeg rendering integration', () => {
@@ -48,6 +54,39 @@ describe('FFmpeg rendering integration', () => {
       });
       expect(metadata.duration).toBeGreaterThan(1);
       expect(bytes.length).toBeGreaterThan(1000);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+  it('normalizes a WebM upload into a publishable H.264/AAC MP4', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bro-normalize-test-'));
+    try {
+      const input = join(dir, 'input.webm'),
+        output = join(dir, 'publishable.mp4');
+      await execute('ffmpeg', [
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=c=0x202020:s=360x640:d=1.5',
+        '-f',
+        'lavfi',
+        '-i',
+        'anullsrc=r=44100:cl=stereo',
+        '-shortest',
+        '-c:v',
+        'libvpx-vp9',
+        '-c:a',
+        'libopus',
+        input,
+      ]);
+      await runFfmpeg(normalizeVideoArgs(input, output));
+      const metadata = await probeVideo(output);
+      expect(metadata).toMatchObject({
+        videoCodec: 'h264',
+        audioCodec: 'aac',
+      });
+      expect(metadata.formatName.split(',')).toContain('mp4');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
