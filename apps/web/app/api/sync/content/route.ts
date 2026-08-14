@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { planConnectedProviderSync, type Provider } from '@bro/core';
 import { backgroundJobs, createDatabase, platformConnections } from '@bro/db';
 import { requireUser } from '@/lib/auth';
@@ -29,7 +29,12 @@ export async function POST(request: Request) {
     const connected = await database.db
         .select({ provider: platformConnections.provider })
         .from(platformConnections)
-        .where(eq(platformConnections.userId, user.id)),
+        .where(
+          and(
+            eq(platformConnections.userId, user.id),
+            eq(platformConnections.status, 'healthy')
+          )
+        ),
       plan = planConnectedProviderSync(
         body.providers,
         connected.map((item) => item.provider as Provider)

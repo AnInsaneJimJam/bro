@@ -47,6 +47,8 @@ export function Onboarding({
     }>
   >([]);
   const [saved, setSaved] = useState(false);
+  const [syncJobId, setSyncJobId] = useState('');
+  const [syncState, setSyncState] = useState('idle');
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
@@ -65,6 +67,52 @@ export function Onboarding({
     void loadProfile();
     if (!demoMode) void refreshConnections();
   }, [demoMode]);
+
+  useEffect(() => {
+    if (
+      step !== 3 ||
+      !syncJobId ||
+      syncState === 'completed' ||
+      syncState === 'failed_retryable' ||
+      syncState === 'failed_permanent'
+    )
+      return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const data = await requestJson(
+          `/api/sync/content/status?bossJobId=${encodeURIComponent(syncJobId)}`
+        );
+        if (stopped) return;
+        setSyncState(data.state || 'queued');
+        if (data.state === 'completed')
+          setConnectionMessage(
+            'Account sync finished. Bro can now infer a niche from your stored content.'
+          );
+        else if (
+          data.state === 'failed_retryable' ||
+          data.state === 'failed_permanent'
+        )
+          setError(
+            data.lastErrorMessage ||
+              'Account sync failed. Reconnect the affected account and try again.'
+          );
+      } catch (requestError) {
+        if (!stopped)
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : 'Could not check account sync status'
+          );
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 2000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [step, syncJobId, syncState]);
 
   async function loadProfile() {
     try {
@@ -129,6 +177,10 @@ export function Onboarding({
 
   async function syncAccounts() {
     const providers = connections
+      .filter(
+        (connection) =>
+          connection.status === 'healthy' && !connection.needsReauthorization
+      )
       .map((connection) => connection.provider)
       .filter((provider) =>
         ['youtube', 'instagram', 'reddit'].includes(provider)
@@ -151,6 +203,8 @@ export function Onboarding({
       const skipped = Array.isArray(result.skippedProviders)
         ? result.skippedProviders
         : [];
+      setSyncJobId(result.bossJobId || '');
+      setSyncState(result.bossJobId ? 'queued' : 'completed');
       setConnectionMessage(
         `Account sync queued for ${result.providers.join(', ')}.${skipped.length ? ` Skipped disconnected: ${skipped.join(', ')}.` : ''} You can infer your niche once the worker finishes.`
       );
@@ -167,6 +221,12 @@ export function Onboarding({
   }
 
   async function inferNiche() {
+    if (syncState === 'queued' || syncState === 'processing') {
+      setError(
+        'Account sync is still running. Bro will enable niche inference when it finishes.'
+      );
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -326,8 +386,19 @@ export function Onboarding({
               enabled.
             </p>
             {!proposalId && (
-              <button className="primary" onClick={inferNiche} disabled={busy}>
-                {busy ? 'Analyzing…' : 'Find my niche'} <ArrowRight />
+              <button
+                className="primary"
+                onClick={inferNiche}
+                disabled={
+                  busy || syncState === 'queued' || syncState === 'processing'
+                }
+              >
+                {busy
+                  ? 'Analyzing…'
+                  : syncState === 'queued' || syncState === 'processing'
+                    ? 'Syncing accounts…'
+                    : 'Find my niche'}{' '}
+                <ArrowRight />
               </button>
             )}
             <label>
@@ -438,7 +509,11 @@ function Connection({
         <small>{note}</small>
       </span>
       <button
-        disabled={Boolean(connection && !connection.needsReauthorization)}
+        disabled={Boolean(
+          connection &&
+            connection.status === 'healthy' &&
+            !connection.needsReauthorization
+        )}
         onClick={() => {
           if (demoMode)
             onDemo(
@@ -447,7 +522,9 @@ function Connection({
           else window.location.href = `/api/oauth/${provider}/start`;
         }}
       >
-        {connection && !connection.needsReauthorization
+        {connection &&
+        connection.status === 'healthy' &&
+        !connection.needsReauthorization
           ? `Connected · ${connection.accountName || name}`
           : connection
             ? 'Reconnect'
