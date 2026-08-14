@@ -15,6 +15,8 @@ import {
   captionsToAss,
   detectedVideoMime,
   extractAudio,
+  needsPublishNormalization,
+  normalizeVideoArgs,
   probeVideo,
   renderArgs,
   runFfmpeg,
@@ -80,14 +82,47 @@ export function createVideoHandlers(): Pick<
               maxDuration: Number(process.env.MAX_VIDEO_DURATION_SECONDS || 60),
             }
           );
+          const existingMetadata = (project.metadata || {}) as Record<
+            string,
+            unknown
+          >;
+          let publishMetadata: Record<string, unknown> = {};
+          if (needsPublishNormalization(media)) {
+            const normalizedPath = join(dir, 'publishable.mp4');
+            await runFfmpeg(normalizeVideoArgs(inputPath, normalizedPath));
+            const normalized = await readFile(normalizedPath),
+              normalizedKey = `${data.userId}/${data.projectId}/publishable.mp4`,
+              bucket = process.env.SUPABASE_RENDERS_BUCKET || 'bro-renders',
+              uploaded = await storage
+                .from(bucket)
+                .upload(normalizedKey, normalized, {
+                  contentType: 'video/mp4',
+                  upsert: true,
+                });
+            if (uploaded.error) throw new Error(uploaded.error.message);
+            const normalizedMedia = await probeVideo(normalizedPath);
+            if (
+              detectedVideoMime(normalizedMedia.formatName) !== 'video/mp4' ||
+              normalizedMedia.videoCodec.toLowerCase() !== 'h264'
+            )
+              throw new Error('FFmpeg did not produce a compatible MP4 video');
+            publishMetadata = {
+              publishObjectKey: normalizedKey,
+              publishObjectBucket: bucket,
+              publishSize: normalized.length,
+              publishMimeType: 'video/mp4',
+            };
+          }
           await database.db
             .update(videoProjects)
             .set({
               metadata: {
+                ...existingMetadata,
                 ...upload,
                 ...media,
                 detectedMimeType: detectedMime,
                 size: original.length,
+                ...publishMetadata,
               },
               state: 'ready',
               updatedAt: new Date(),

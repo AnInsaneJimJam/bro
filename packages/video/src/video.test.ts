@@ -10,6 +10,8 @@ import {
   parseFfprobe,
   captionsToAss,
   detectedVideoMime,
+  needsPublishNormalization,
+  normalizeVideoArgs,
 } from './index';
 describe('captions', () => {
   it('segments punctuation', () =>
@@ -75,6 +77,25 @@ describe('uploads', () => {
     expect(detectedVideoMime('mov,mp4,m4a,3gp,3g2,mj2')).toBe('video/mp4');
     expect(detectedVideoMime('matroska,webm')).toBe('video/webm');
     expect(detectedVideoMime('pdf')).toBe('application/octet-stream');
+  });
+  it('normalizes non-MP4 or non-H.264/AAC uploads for publishing', () => {
+    expect(
+      needsPublishNormalization({
+        formatName: 'mov,mp4,m4a,3gp,3g2,mj2',
+        videoCodec: 'h264',
+        audioCodec: 'aac',
+      })
+    ).toBe(false);
+    expect(
+      needsPublishNormalization({
+        formatName: 'matroska,webm',
+        videoCodec: 'vp9',
+        audioCodec: 'opus',
+      })
+    ).toBe(true);
+    expect(normalizeVideoArgs('input.webm', 'publishable.mp4')).toEqual(
+      expect.arrayContaining(['libx264', 'aac', 'yuv420p', 'publishable.mp4'])
+    );
   });
 });
 describe('render artifacts', () => {

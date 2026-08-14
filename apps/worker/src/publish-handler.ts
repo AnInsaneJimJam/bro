@@ -52,23 +52,41 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
           .from(platformConnections)
           .where(eq(platformConnections.userId, data.userId)),
       ]);
+      const projectMetadata = (project?.video_projects.metadata || {}) as {
+        publishObjectKey?: string;
+        publishObjectBucket?: string;
+        publishSize?: number;
+        publishMimeType?: string;
+        size?: number;
+        mimeType?: string;
+        detectedMimeType?: string;
+        renderedSize?: number;
+        renderedMimeType?: string;
+      };
       const mediaKey =
         project?.video_projects.renderedKey ||
+        projectMetadata.publishObjectKey ||
         project?.video_projects.originalKey;
       if (!job || !project || !mediaKey)
         throw new Error('Owned publish job or publishable media not found');
       const usingRenderedMedia = Boolean(project.video_projects.renderedKey);
+      const usingPublishDerivative = Boolean(
+        !usingRenderedMedia && projectMetadata.publishObjectKey
+      );
+      const mediaBucket = usingRenderedMedia
+        ? process.env.SUPABASE_RENDERS_BUCKET || 'bro-renders'
+        : usingPublishDerivative
+          ? projectMetadata.publishObjectBucket ||
+            process.env.SUPABASE_RENDERS_BUCKET ||
+            'bro-renders'
+          : process.env.SUPABASE_ORIGINALS_BUCKET || 'bro-originals';
       const storage = createClient(
           required('NEXT_PUBLIC_SUPABASE_URL'),
           required('SUPABASE_SERVICE_ROLE_KEY'),
           { auth: { persistSession: false } }
         ).storage,
         { data: signed, error } = await storage
-          .from(
-            usingRenderedMedia
-              ? process.env.SUPABASE_RENDERS_BUCKET || 'bro-renders'
-              : process.env.SUPABASE_ORIGINALS_BUCKET || 'bro-originals'
-          )
+          .from(mediaBucket)
           .createSignedUrl(mediaKey, 3600);
       if (error || !signed?.signedUrl)
         throw new Error(
@@ -95,13 +113,6 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
           () => token('instagram'),
           process.env.INSTAGRAM_API_VERSION || 'v24.0'
         );
-      const projectMeta = project.video_projects.metadata as {
-        size?: number;
-        mimeType?: string;
-        detectedMimeType?: string;
-        renderedSize?: number;
-        renderedMimeType?: string;
-      };
       const allDestinations: DestinationRecord[] = rows.map((row) => {
         const provider = row.provider as 'youtube' | 'instagram',
           meta = row.metadata as {
@@ -126,13 +137,17 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
             caption: provider === 'youtube' ? meta.description : meta.caption,
             visibility: meta.visibility,
             mimeType: usingRenderedMedia
-              ? projectMeta.renderedMimeType || 'video/mp4'
-              : projectMeta.detectedMimeType ||
-                projectMeta.mimeType ||
-                'video/mp4',
+              ? projectMetadata.renderedMimeType || 'video/mp4'
+              : usingPublishDerivative
+                ? projectMetadata.publishMimeType || 'video/mp4'
+                : projectMetadata.detectedMimeType ||
+                  projectMetadata.mimeType ||
+                  'video/mp4',
             contentLength: usingRenderedMedia
-              ? projectMeta.renderedSize
-              : projectMeta.size,
+              ? projectMetadata.renderedSize
+              : usingPublishDerivative
+                ? projectMetadata.publishSize
+                : projectMetadata.size,
           },
         };
       });

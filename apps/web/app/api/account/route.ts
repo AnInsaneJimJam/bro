@@ -83,7 +83,11 @@ export async function DELETE() {
         {
           bucket: process.env.SUPABASE_RENDERS_BUCKET || 'bro-renders',
           keys: projects.flatMap((project) =>
-            project.renderedKey ? [project.renderedKey] : []
+            [
+              project.renderedKey,
+              (project.metadata as { publishObjectKey?: string } | null)
+                ?.publishObjectKey,
+            ].filter((key): key is string => Boolean(key))
           ),
         },
         {

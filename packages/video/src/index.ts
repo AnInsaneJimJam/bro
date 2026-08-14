@@ -168,6 +168,42 @@ export function detectedVideoMime(formatName: string) {
   if (formats.has('mp4') || formats.has('mov')) return 'video/mp4';
   return 'application/octet-stream';
 }
+export function needsPublishNormalization(
+  media: Pick<ProbeMetadata, 'formatName' | 'videoCodec' | 'audioCodec'>
+) {
+  const formats = new Set(media.formatName.toLowerCase().split(','));
+  return (
+    !formats.has('mp4') ||
+    media.videoCodec.toLowerCase() !== 'h264' ||
+    (!!media.audioCodec && media.audioCodec.toLowerCase() !== 'aac')
+  );
+}
+export function normalizeVideoArgs(input: string, output: string) {
+  return [
+    '-y',
+    '-i',
+    input,
+    '-map',
+    '0:v:0',
+    '-map',
+    '0:a?',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'medium',
+    '-crf',
+    '20',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '128k',
+    '-movflags',
+    '+faststart',
+    output,
+  ];
+}
 export function renderArgs(input: string, assFile: string, output: string) {
   return [
     '-y',
