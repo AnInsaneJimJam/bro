@@ -81,7 +81,7 @@ export function createVideoHandlers(): Pick<
             duration: metadata.duration,
           },
           {
-            maxBytes: Number(process.env.MAX_UPLOAD_BYTES || 536870912),
+            maxBytes: Number(process.env.MAX_UPLOAD_BYTES || 52428800),
             maxDuration: Number(process.env.MAX_VIDEO_DURATION_SECONDS || 60),
           }
         );

@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     const body = input.parse(await req.json());
     if (!allowedVideoMimeTypes.has(body.mimeType))
       throw new Error('Unsupported video format');
-    const max = Number(process.env.MAX_UPLOAD_BYTES || 536870912);
+    const max = Number(process.env.MAX_UPLOAD_BYTES || 52428800);
     if (body.size > max)
       throw new Error(`Video exceeds the ${max}-byte upload limit`);
     const safe = sanitizeUploadFilename(body.filename),
