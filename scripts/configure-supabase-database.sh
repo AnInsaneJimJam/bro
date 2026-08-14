@@ -30,7 +30,7 @@ bro_encoded_password="$({
     node -e 'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => input += chunk); process.stdin.on("end", () => process.stdout.write(encodeURIComponent(input)));'
 })"
 
-bro_database_url="postgresql://postgres.${BRO_PROJECT_REF}:${bro_encoded_password}@${BRO_POOLER_HOST}:5432/postgres?sslmode=require"
+bro_database_url="postgresql://postgres.${BRO_PROJECT_REF}:${bro_encoded_password}@${BRO_POOLER_HOST}:5432/postgres?sslmode=verify-full"
 
 echo "Applying Bro database migrations..."
 DATABASE_DIRECT_URL="${bro_database_url}" pnpm --filter @bro/db db:migrate
