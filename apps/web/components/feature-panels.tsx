@@ -495,13 +495,28 @@ function Videos() {
     setStatus(
       d.demo
         ? 'Demo data — edits stay in this browser.'
-        : `Project state: ${d.project.state}`
+        : d.project.state === 'failed'
+          ? 'Video validation failed. Retry the validation job or upload a different file.'
+          : `Project state: ${d.project.state}`
     );
     if (!d.demo) {
       const media = await fetch(`/api/videos/${targetProjectId}/media`),
         signed = await media.json();
       if (media.ok) setPreview(signed.url);
     }
+  }
+  async function retryValidation() {
+    if (!projectId || projectId === 'demo') return;
+    const response = await fetch(`/api/videos/${projectId}/validate`, {
+        method: 'POST',
+      }),
+      data = await response.json();
+    setProjectState(data.state || (response.ok ? 'queued' : 'failed'));
+    setStatus(
+      response.ok
+        ? 'Validation queued again. Bro will enable publishing when it is ready.'
+        : data.error || 'Could not retry video validation.'
+    );
   }
   async function save() {
     if (validation.length) {
@@ -684,6 +699,12 @@ function Videos() {
             <button onClick={() => refresh()}>
               <RefreshCw />
               Refresh status
+            </button>
+          )}
+          {projectId && projectId !== 'demo' && projectState === 'failed' && (
+            <button onClick={retryValidation}>
+              <RefreshCw />
+              Retry validation
             </button>
           )}
         </div>
