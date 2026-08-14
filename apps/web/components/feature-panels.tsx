@@ -1197,6 +1197,19 @@ function Connections() {
     setMessage(response.ok ? `${provider} disconnected.` : data.error);
     load();
   }
+  async function syncConnection(provider: Connection['provider']) {
+    const response = await fetch('/api/sync/content', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ providers: [provider] }),
+      }),
+      data = await response.json();
+    setMessage(
+      response.ok
+        ? `${provider} content sync queued. Refresh this page shortly to see its latest status.`
+        : data.error
+    );
+  }
   const notes = {
     youtube: 'Owned Shorts, uploads and comments',
     instagram: 'Eligible professional account required',
@@ -1241,6 +1254,10 @@ function Connections() {
               <div>
                 {connection && !connection.demo ? (
                   <>
+                    <button onClick={() => syncConnection(provider)}>
+                      Sync now
+                      <RefreshCw />
+                    </button>
                     <button
                       onClick={() =>
                         (location.href = `/api/oauth/${provider}/start`)
@@ -1329,6 +1346,12 @@ function Settings() {
       location.href = '/login';
     } else setMessage(data.error);
   }
+  async function signOut() {
+    const response = await fetch('/api/auth/signout', { method: 'POST' }),
+      data = await response.json();
+    if (response.ok) location.href = '/login';
+    else setMessage(data.error || 'Could not sign out.');
+  }
   return (
     <Surface
       title="Settings"
@@ -1351,6 +1374,10 @@ function Settings() {
           set={(v) => change('instagram', v)}
         />
         {message && <small>{message}</small>}
+      </section>
+      <section className="settings-section">
+        <h3>Session</h3>
+        <button onClick={signOut}>Sign out of Bro</button>
       </section>
       <section className="settings-section">
         <h3>Privacy</h3>
