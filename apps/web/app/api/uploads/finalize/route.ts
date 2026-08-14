@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createDatabase, videoProjects } from '@bro/db';
+import { backgroundJobs, createDatabase, videoProjects } from '@bro/db';
 import { requireUser } from '@/lib/auth';
 import { enqueueJob } from '@/lib/jobs';
 import { jsonError } from '@/lib/http';
@@ -52,6 +52,15 @@ export async function POST(req: Request) {
         },
         { singletonKey: `validate:${body.projectId}` }
       );
+    await database.db.insert(backgroundJobs).values({
+      userId: user.id,
+      bossJobId,
+      kind: 'validate-video',
+      resourceType: 'video_project',
+      resourceId: body.projectId,
+      state: 'queued',
+      correlationId,
+    });
     return NextResponse.json(
       { projectId: body.projectId, state: 'queued', bossJobId, correlationId },
       { status: 202 }

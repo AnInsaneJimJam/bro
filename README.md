@@ -1,6 +1,6 @@
 # Bro
 
-Bro is a desktop-optimized responsive content manager for solo creators publishing English YouTube Shorts and Instagram Reels. It covers account connection, evidence-backed niche inference and topic opportunities, versioned short-form scripts, signed video uploads, word-timed editable captions, FFmpeg burn-in rendering, durable scheduling/publishing, and grounded analysis of owned-media comments.
+Bro is a desktop-optimized responsive content manager for solo creators publishing English YouTube Shorts and Instagram Reels. It covers account connection, evidence-backed niche inference and topic opportunities, versioned short-form scripts, signed video uploads, direct multi-platform publishing, durable scheduling, and grounded analysis of owned-media comments. Subtitle generation and burn-in remain implemented as a later editing slice and do not block publishing.
 
 Demo mode is visually labeled, never calls social platforms, and never reports a fake live publish.
 
@@ -31,7 +31,7 @@ Suggested three-minute walkthrough:
 
 1. Show the evidence-backed confirmed niche and open **Ideas** to refresh scored, country-scoped opportunities.
 2. Ask Bro: `Write a 45-second script for topic 2 with a contrarian hook`, then edit and save the generated script.
-3. Ask: `Create captions for my latest uploaded video`, open **Videos**, edit/split/merge a caption cue, and show the render controls.
+3. Upload a video in **Videos**, enter separate YouTube title/description and Instagram caption metadata, and show the publish confirmation.
 4. Open **Calendar**, select the ready demo video, review the manual time slot, accept the confirmation, and point out the `scheduled · demo` card and no-platform-call notice.
 5. Open **Comments** and analyze what viewers are confused about, noting the sample size, approximate sentiment notice, and representative evidence.
 
@@ -56,13 +56,13 @@ In another terminal, start durable work:
 pnpm dev:worker
 ```
 
-Open `http://localhost:3000`. For a platform-free demo, retain `NEXT_PUBLIC_DEMO_MODE=true`. External social side effects remain disabled; optional OpenAI-backed microphone transcription may still run when its key is configured.
+Open `http://localhost:3000`. For a platform-free demo, retain `NEXT_PUBLIC_DEMO_MODE=true`. External social side effects remain disabled; optional microphone transcription requires the configured speech provider.
 
 ### Real-data credential checklist
 
 Set `NEXT_PUBLIC_DEMO_MODE=false` and provide these values in `.env`. Never commit that file or paste secrets into the browser:
 
-- **OpenAI:** `OPENAI_API_KEY`. The four `OPENAI_*_MODEL` values are configurable model names, not additional keys.
+- **Gemini (preferred text/chat provider):** `GEMINI_API_KEY`. `GEMINI_TEXT_MODEL` and `GEMINI_SCRIPT_MODEL` are configurable model names, not additional keys. OpenAI remains an optional fallback for text and the separate speech/caption transcription paths.
 - **Supabase:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY`, plus `DATABASE_URL` and `DATABASE_DIRECT_URL` for its Postgres database.
 - **Bro security:** `TOKEN_ENCRYPTION_KEY` and `OAUTH_STATE_SECRET`, which you generate yourself; these are not third-party API keys.
 - **YouTube:** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from a Google Cloud Web OAuth client. No separate YouTube API key is needed for Bro's owned-channel, comment, and upload flows.
@@ -119,9 +119,9 @@ Bro detects unsupported accounts, creates Reels containers close to execution, p
 
 Set `REDDIT_INTEGRATION_ENABLED=false` until the intended use is approved under current Reddit terms. When approved, create a confidential web app with the exact redirect URI and a descriptive user agent. Bro reads only the connected user's bounded history and official hot/search signals; it does not publish, scrape, or use Reddit content for training.
 
-### OpenAI
+### AI providers
 
-Set `OPENAI_API_KEY`. Text/script models remain configurable. Recorded commands use `gpt-transcribe`; caption transcription uses `whisper-1` verbose JSON with word timestamps behind `TranscriptionProvider`.
+Set `GEMINI_API_KEY` for live typed chat and structured text generation. OpenAI is an optional fallback for text; recorded commands use the configured speech provider and caption transcription uses `whisper-1` verbose JSON with word timestamps behind `TranscriptionProvider`.
 
 ## Deployment
 
