@@ -45,25 +45,27 @@ export async function GET() {
         ['OAUTH_STATE_SECRET'],
         'OAuth state signing is configured.'
       ),
-      envCheck(
+      providerScopeCheck(
         'youtube',
         'YouTube OAuth',
+        ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI'],
+        'GOOGLE_SCOPES',
         [
-          'GOOGLE_CLIENT_ID',
-          'GOOGLE_CLIENT_SECRET',
-          'GOOGLE_REDIRECT_URI',
-          'GOOGLE_SCOPES',
+          'https://www.googleapis.com/auth/youtube.upload',
+          'https://www.googleapis.com/auth/youtube.readonly',
+          'https://www.googleapis.com/auth/youtube.force-ssl',
         ],
         'YouTube connection and publishing can be attempted.'
       ),
-      envCheck(
+      providerScopeCheck(
         'instagram',
         'Instagram OAuth',
+        ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET', 'INSTAGRAM_REDIRECT_URI'],
+        'INSTAGRAM_SCOPES',
         [
-          'INSTAGRAM_APP_ID',
-          'INSTAGRAM_APP_SECRET',
-          'INSTAGRAM_REDIRECT_URI',
-          'INSTAGRAM_SCOPES',
+          'instagram_business_basic',
+          'instagram_business_content_publish',
+          'instagram_business_manage_comments',
         ],
         'Instagram connection can be attempted; account eligibility and review still apply.'
       ),
@@ -113,4 +115,36 @@ function envCheck(
     status: missing.length ? 'missing' : 'ready',
     detail: missing.length ? `Missing ${missing.join(', ')}.` : readyDetail,
   };
+}
+
+function providerScopeCheck(
+  key: string,
+  label: string,
+  envNames: string[],
+  scopeName: string,
+  requiredScopes: string[],
+  readyDetail: string
+): Check {
+  const missing = envNames.filter((name) => !process.env[name]?.trim());
+  if (missing.length)
+    return {
+      key,
+      label,
+      status: 'missing',
+      detail: `Missing ${missing.join(', ')}.`,
+    };
+  const configured = new Set(
+    (process.env[scopeName] || '').split(/[\s,]+/).filter(Boolean)
+  );
+  const missingScopes = requiredScopes.filter(
+    (scope) => !configured.has(scope)
+  );
+  return missingScopes.length
+    ? {
+        key,
+        label,
+        status: 'missing',
+        detail: `${scopeName} is missing: ${missingScopes.join(', ')}. Reconnect after adding the required scopes.`,
+      }
+    : { key, label, status: 'ready', detail: readyDetail };
 }
