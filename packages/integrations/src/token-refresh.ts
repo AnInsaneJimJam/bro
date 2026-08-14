@@ -54,3 +54,25 @@ export async function refreshProviderAccessToken(
     scopes: data.scope?.split(' ') || input.scopes,
   };
 }
+
+export async function refreshInstagramAccessToken(
+  accessToken: string,
+  scopes: string[] = [],
+  http: HttpClient = fetch
+): Promise<OAuthTokens> {
+  const data = await providerJson<{
+    access_token: string;
+    expires_in?: number;
+  }>(
+    'instagram',
+    http,
+    `https://graph.instagram.com/refresh_access_token?${new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: accessToken })}`
+  );
+  return {
+    accessToken: data.access_token,
+    expiresAt: data.expires_in
+      ? new Date(Date.now() + data.expires_in * 1000)
+      : undefined,
+    scopes,
+  };
+}

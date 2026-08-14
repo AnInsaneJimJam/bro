@@ -1,7 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { decryptSecret, encryptSecret } from '@bro/core';
 import { platformConnections, type createDatabase } from '@bro/db';
-import { refreshProviderAccessToken } from '@bro/integrations';
+import {
+  refreshInstagramAccessToken,
+  refreshProviderAccessToken,
+} from '@bro/integrations';
 
 export async function accessToken(
   database: ReturnType<typeof createDatabase>,
@@ -14,16 +17,14 @@ export async function accessToken(
       key
     );
   if (row.provider === 'instagram') {
-    await database.db
-      .update(platformConnections)
-      .set({ status: 'reconnect_required', updatedAt: new Date() })
-      .where(eq(platformConnections.id, row.id));
-    throw Object.assign(
-      new Error(
-        'Instagram access expired. Reconnect the professional account.'
+    const refreshed = await refreshInstagramAccessToken(
+      decryptSecret(
+        row.encryptedAccessToken as Parameters<typeof decryptSecret>[0],
+        key
       ),
-      { code: 'TOKEN_RECONNECT_REQUIRED' }
+      row.scopes || []
     );
+    return persistRefreshedToken(database, row, key, refreshed);
   }
   if (row.provider !== 'youtube' && row.provider !== 'reddit')
     throw new Error('Unsupported token provider');
@@ -55,6 +56,15 @@ export async function accessToken(
     scopes: row.scopes || [],
     userAgent: process.env.REDDIT_USER_AGENT,
   });
+  return persistRefreshedToken(database, row, key, refreshed);
+}
+
+async function persistRefreshedToken(
+  database: ReturnType<typeof createDatabase>,
+  row: typeof platformConnections.$inferSelect,
+  key: Buffer,
+  refreshed: Awaited<ReturnType<typeof refreshProviderAccessToken>>
+) {
   const encrypted = encryptSecret(
     refreshed.accessToken,
     key,

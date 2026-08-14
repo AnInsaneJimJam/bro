@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   comments,
   createDatabase,
@@ -93,7 +93,15 @@ export function createSyncHandlers(): Pick<
                   creatorContentItems.provider,
                   creatorContentItems.providerId,
                 ],
-                set: { syncedAt: new Date() },
+                set: {
+                  title: sql`excluded.title`,
+                  body: sql`excluded.body`,
+                  metrics: sql`excluded.metrics`,
+                  publishedAt: sql`excluded.published_at`,
+                  canonicalUrl: sql`excluded.canonical_url`,
+                  syncedAt: sql`excluded.synced_at`,
+                  updatedAt: new Date(),
+                },
               });
           await database.db
             .update(platformConnections)
@@ -167,7 +175,13 @@ export function createSyncHandlers(): Pick<
             )
             .onConflictDoUpdate({
               target: [comments.postId, comments.providerCommentId],
-              set: { syncedAt: new Date(), status: 'visible' },
+              set: {
+                text: sql`excluded.text`,
+                commentedAt: sql`excluded.commented_at`,
+                syncedAt: sql`excluded.synced_at`,
+                status: 'visible',
+                updatedAt: new Date(),
+              },
             });
         summary[provider] = synced.length;
       }

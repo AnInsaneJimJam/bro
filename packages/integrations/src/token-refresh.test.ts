@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { refreshProviderAccessToken } from './token-refresh';
+import {
+  refreshInstagramAccessToken,
+  refreshProviderAccessToken,
+} from './token-refresh';
 describe('provider token refresh', () => {
   it("uses Google's refresh-token grant without exposing it in the URL", async () => {
     const http = vi.fn(async (url: string, init?: RequestInit) => {
@@ -49,5 +52,27 @@ describe('provider token refresh', () => {
       http
     );
     expect(result.scopes).toEqual(['identity', 'read']);
+  });
+  it('refreshes a long-lived Instagram token and preserves its scopes', async () => {
+    let requestedUrl = '';
+    const result = await refreshInstagramAccessToken(
+      'long-lived-token',
+      ['instagram_business_basic'],
+      async (input) => {
+        requestedUrl = String(input);
+        return new Response(
+          JSON.stringify({ access_token: 'refreshed-token', expires_in: 3600 }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+    );
+    const url = new URL(requestedUrl);
+    expect(url.origin + url.pathname).toBe(
+      'https://graph.instagram.com/refresh_access_token'
+    );
+    expect(url.searchParams.get('grant_type')).toBe('ig_refresh_token');
+    expect(url.searchParams.get('access_token')).toBe('long-lived-token');
+    expect(result.accessToken).toBe('refreshed-token');
+    expect(result.scopes).toEqual(['instagram_business_basic']);
   });
 });
