@@ -33,26 +33,6 @@ const nav = [
   [Link2, 'Connections'],
   [Settings, 'Settings'],
 ] as const;
-const ideas = [
-  {
-    title: 'AI agents that remember your work',
-    detail: 'A practical memory workflow for busy creators.',
-    score: 86,
-    age: '1h ago',
-  },
-  {
-    title: 'Turn voice notes into a second brain',
-    detail: 'A 45-second build with tools people already use.',
-    score: 74,
-    age: '4h ago',
-  },
-  {
-    title: 'Why most AI productivity systems fail',
-    detail: 'A contrarian angle grounded in creator discussions.',
-    score: 63,
-    age: '11h ago',
-  },
-];
 type HomeData = {
   mode: string;
   profile?: {
@@ -296,36 +276,45 @@ export function Dashboard() {
                 </button>
               </div>
               <div className="idea-list">
-                {(home?.opportunities?.length
-                  ? home.opportunities.map((item) => ({
+                {home === null ? (
+                  <p className="all-clear">Loading your opportunities…</p>
+                ) : home.opportunities.length === 0 ? (
+                  <p className="all-clear">
+                    No current opportunities yet. Connect an account, confirm
+                    your niche, then ask Bro to discover topics.
+                  </p>
+                ) : (
+                  home.opportunities.map((item, i) => {
+                    const idea = {
                       title: item.topic,
                       detail:
                         item.angle || 'Evidence-backed creator opportunity.',
                       score: item.score || 0,
                       age: new Date(item.createdAt).toLocaleString(),
-                    }))
-                  : ideas
-                ).map((idea, i) => (
-                  <article className="idea" key={idea.title}>
-                    <div className="idea-icon">
-                      {i === 0 ? <TrendingUp /> : <Lightbulb />}
-                    </div>
-                    <div className="idea-copy">
-                      <h3>{idea.title}</h3>
-                      <p>{idea.detail}</p>
-                    </div>
-                    <div className="score">
-                      <strong>{idea.score}</strong>
-                      <span>Opportunity</span>
-                    </div>
-                    <div className="evidence">
-                      <span>Evidence</span>
-                      <strong>
-                        {idea.age} <i />
-                      </strong>
-                    </div>
-                  </article>
-                ))}
+                    };
+                    return (
+                      <article className="idea" key={idea.title}>
+                        <div className="idea-icon">
+                          {i === 0 ? <TrendingUp /> : <Lightbulb />}
+                        </div>
+                        <div className="idea-copy">
+                          <h3>{idea.title}</h3>
+                          <p>{idea.detail}</p>
+                        </div>
+                        <div className="score">
+                          <strong>{idea.score}</strong>
+                          <span>Opportunity</span>
+                        </div>
+                        <div className="evidence">
+                          <span>Evidence</span>
+                          <strong>
+                            {idea.age} <i />
+                          </strong>
+                        </div>
+                      </article>
+                    );
+                  })
+                )}
               </div>
               <div className="section-head lower">
                 <h2>Script in progress</h2>
@@ -339,14 +328,17 @@ export function Dashboard() {
                   <strong>
                     {home?.script?.title || 'No script in progress'}
                   </strong>
-                  <span>
-                    <i style={{ width: '65%' }} />
-                    65% complete
-                  </span>
+                  {home?.script ? (
+                    <span>Draft v{home.script.currentVersion || 1}</span>
+                  ) : (
+                    <span>Generate one from a topic opportunity</span>
+                  )}
                 </div>
-                <button>
-                  Continue <ArrowRight />
-                </button>
+                {home?.script && (
+                  <button>
+                    Continue <ArrowRight />
+                  </button>
+                )}
               </article>
               <div className="section-head lower">
                 <h2>Next scheduled post</h2>
@@ -372,10 +364,11 @@ export function Dashboard() {
                   </strong>
                   <span>{home?.nextJob?.state || 'No job'}</span>
                 </div>
-                <div className="destinations">
-                  <Youtube />
-                  <b>IG</b>
-                </div>
+                {home?.nextJob && (
+                  <div className="destinations">
+                    <span>Scheduled job</span>
+                  </div>
+                )}
               </article>
             </section>
             <aside className="right-column">
@@ -420,6 +413,11 @@ export function Dashboard() {
                     </div>
                   );
                 })}
+                {home && home.connections.length === 0 && (
+                  <p className="all-clear">
+                    No creator accounts connected yet.
+                  </p>
+                )}
               </div>
               <div className="section-head attention-head">
                 <h2>Needs attention</h2>
@@ -459,7 +457,9 @@ export function Dashboard() {
                 <h2>Try asking Bro</h2>
                 <button
                   onClick={() =>
-                    setCommand('Find five trending AI-memory topics in India')
+                    setCommand(
+                      `Find five current ${home?.niche?.label || 'creator'} topics in ${home?.profile?.countryName || 'my country'}`
+                    )
                   }
                 >
                   Find five trending topics
