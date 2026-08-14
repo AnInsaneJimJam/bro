@@ -17,14 +17,19 @@ export async function accessToken(
       key
     );
   if (row.provider === 'instagram') {
-    const refreshed = await refreshInstagramAccessToken(
-      decryptSecret(
-        row.encryptedAccessToken as Parameters<typeof decryptSecret>[0],
-        key
-      ),
-      row.scopes || []
-    );
-    return persistRefreshedToken(database, row, key, refreshed);
+    try {
+      const refreshed = await refreshInstagramAccessToken(
+        decryptSecret(
+          row.encryptedAccessToken as Parameters<typeof decryptSecret>[0],
+          key
+        ),
+        row.scopes || []
+      );
+      return persistRefreshedToken(database, row, key, refreshed);
+    } catch (error) {
+      await markReconnectRequired(database, row, error);
+      throw error;
+    }
   }
   if (row.provider !== 'youtube' && row.provider !== 'reddit')
     throw new Error('Unsupported token provider');
@@ -40,23 +45,64 @@ export async function accessToken(
       { code: 'TOKEN_RECONNECT_REQUIRED' }
     );
   }
-  const refreshed = await refreshProviderAccessToken(row.provider, {
-    refreshToken: decryptSecret(
-      row.encryptedRefreshToken as Parameters<typeof decryptSecret>[0],
-      key
-    ),
-    clientId: required(
-      row.provider === 'youtube' ? 'GOOGLE_CLIENT_ID' : 'REDDIT_CLIENT_ID'
-    ),
-    clientSecret: required(
-      row.provider === 'youtube'
-        ? 'GOOGLE_CLIENT_SECRET'
-        : 'REDDIT_CLIENT_SECRET'
-    ),
-    scopes: row.scopes || [],
-    userAgent: process.env.REDDIT_USER_AGENT,
-  });
-  return persistRefreshedToken(database, row, key, refreshed);
+  try {
+    const refreshed = await refreshProviderAccessToken(row.provider, {
+      refreshToken: decryptSecret(
+        row.encryptedRefreshToken as Parameters<typeof decryptSecret>[0],
+        key
+      ),
+      clientId: required(
+        row.provider === 'youtube' ? 'GOOGLE_CLIENT_ID' : 'REDDIT_CLIENT_ID'
+      ),
+      clientSecret: required(
+        row.provider === 'youtube'
+          ? 'GOOGLE_CLIENT_SECRET'
+          : 'REDDIT_CLIENT_SECRET'
+      ),
+      scopes: row.scopes || [],
+      userAgent: process.env.REDDIT_USER_AGENT,
+    });
+    return persistRefreshedToken(database, row, key, refreshed);
+  } catch (error) {
+    await markReconnectRequired(database, row, error);
+    throw error;
+  }
+}
+
+async function markReconnectRequired(
+  database: ReturnType<typeof createDatabase>,
+  row: typeof platformConnections.$inferSelect,
+  error: unknown
+) {
+  if (!isAuthorizationFailure(error)) return;
+  await database.db
+    .update(platformConnections)
+    .set({
+      status: 'reconnect_required',
+      metadata: {
+        ...((row.metadata || {}) as Record<string, unknown>),
+        lastError:
+          error instanceof Error
+            ? error.message
+            : 'Provider authorization expired',
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(platformConnections.id, row.id));
+}
+
+export function isAuthorizationFailure(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as {
+    code?: unknown;
+    httpStatus?: unknown;
+    status?: unknown;
+  };
+  return (
+    value.code === 'PROVIDER_AUTH_EXPIRED' ||
+    value.httpStatus === 401 ||
+    value.status === 401
+  );
 }
 
 async function persistRefreshedToken(
