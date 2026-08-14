@@ -49,14 +49,9 @@ export function resolveDemoCommand(text: string): ResolvedCommand {
     };
   }
   if (/captions?|transcrib/.test(lower)) {
-    if (!/latest|this|uploaded/.test(lower))
-      return {
-        followUp:
-          'Which uploaded video should I transcribe for editable captions?',
-      };
     return {
-      tool: 'transcribe_video_for_captions',
-      arguments: { projectId: '30000000-0000-4000-8000-000000000001' },
+      followUp:
+        'Subtitle editing is not enabled yet. Upload and publish the original video now; caption tools are planned for a later update.',
     };
   }
   if (/cancel/.test(lower))

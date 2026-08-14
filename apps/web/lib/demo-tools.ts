@@ -27,11 +27,11 @@ export async function executeDemoTool(
     case 'transcribe_video_for_captions':
       return {
         projectId: args.projectId,
-        state: 'captions_ready',
-        cueCount: 2,
+        status: 'unavailable',
+        code: 'SUBTITLE_FEATURE_DEFERRED',
         demo: true,
         notice:
-          'Loaded the labeled sample transcript. No synthetic transcription was presented as a live job.',
+          'Subtitle editing is not enabled in this MVP. Upload and publish the original video instead.',
       };
     case 'analyze_comments':
       return {

@@ -1,10 +1,17 @@
-import type { ToolName } from '@bro/ai';
+import { isDeferredVideoEditingTool, type ToolName } from '@bro/ai';
 
 export async function executeToolThroughOwnedRoutes(
   request: Request,
   name: ToolName,
   args: Record<string, unknown>
 ) {
+  if (isDeferredVideoEditingTool(name))
+    return {
+      status: 'unavailable',
+      code: 'SUBTITLE_FEATURE_DEFERRED',
+      message:
+        'Subtitle editing is not enabled in this MVP yet. Upload and publish the original video instead.',
+    };
   const routes: Partial<
     Record<
       ToolName,

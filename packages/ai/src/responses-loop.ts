@@ -1,7 +1,12 @@
 import OpenAI from 'openai';
 import { zodResponsesFunction } from 'openai/helpers/zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { toolSchemas, type ToolName, validateToolCall } from './index';
+import {
+  isDeferredVideoEditingTool,
+  toolSchemas,
+  type ToolName,
+  validateToolCall,
+} from './index';
 
 export type ToolExecutor = (
   name: ToolName,
@@ -35,24 +40,28 @@ const descriptions: Record<ToolName, string> = {
     'Analyze only stored comments matching the supplied filters.',
 };
 export function createResponseTools() {
-  return Object.entries(toolSchemas).map(([name, schema]) =>
-    zodResponsesFunction({
-      name,
-      description: descriptions[name as ToolName],
-      parameters: schema,
-    })
-  );
+  return Object.entries(toolSchemas)
+    .filter(([name]) => !isDeferredVideoEditingTool(name))
+    .map(([name, schema]) =>
+      zodResponsesFunction({
+        name,
+        description: descriptions[name as ToolName],
+        parameters: schema,
+      })
+    );
 }
 
 export function createGeminiFunctionDeclarations() {
-  return Object.entries(toolSchemas).map(([name, schema]) => ({
-    name,
-    description: descriptions[name as ToolName],
-    parameters: zodToJsonSchema(schema, {
-      target: 'openApi3',
-      $refStrategy: 'none',
-    }),
-  }));
+  return Object.entries(toolSchemas)
+    .filter(([name]) => !isDeferredVideoEditingTool(name))
+    .map(([name, schema]) => ({
+      name,
+      description: descriptions[name as ToolName],
+      parameters: zodToJsonSchema(schema, {
+        target: 'openApi3',
+        $refStrategy: 'none',
+      }),
+    }));
 }
 
 export async function runResponsesToolLoop(input: {
@@ -187,7 +196,7 @@ export async function runGeminiToolLoop(input: {
   }
   throw new Error('Bro exceeded the maximum Gemini tool-call rounds');
 }
-const SYSTEM = `You are Bro, a concise English creator workflow assistant. Use only the supplied application tools for data and actions. Never claim current trends without tool evidence. Never guess required video, platform, duration, date, time, or time zone; ask one precise follow-up. Externally visible actions remain governed by application confirmation and auto-publish policy. Never request, reveal, or accept OAuth tokens or passwords.`;
+const SYSTEM = `You are Bro, a concise English creator workflow assistant. Use only the supplied application tools for data and actions. Never claim current trends without tool evidence. Never guess required video, platform, duration, date, time, or time zone; ask one precise follow-up. Externally visible actions remain governed by application confirmation and auto-publish policy. Subtitle transcription and caption burn-in are not enabled in this MVP; if asked, explain that the creator can upload and publish the original video now and that subtitle editing is planned for a later slice. Never request, reveal, or accept OAuth tokens or passwords.`;
 
 type GeminiPart = {
   text?: string;

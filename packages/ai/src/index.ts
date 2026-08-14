@@ -87,6 +87,25 @@ export const toolSchemas = {
   }),
 } as const;
 export type ToolName = keyof typeof toolSchemas;
+
+// Kept in the schema registry so the editing slice can be re-enabled without
+// changing the domain contract, but deliberately omitted from live model tool
+// declarations until subtitle editing is ready for creators.
+export const deferredVideoEditingTools = [
+  'transcribe_video_for_captions',
+  'render_captioned_video',
+] as const satisfies readonly ToolName[];
+
+export function isDeferredVideoEditingTool(name: string) {
+  return (deferredVideoEditingTools as readonly string[]).includes(name);
+}
+
+export function liveToolNames() {
+  return Object.keys(toolSchemas).filter(
+    (name): name is ToolName => !isDeferredVideoEditingTool(name)
+  );
+}
+
 export function validateToolCall(name: string, args: unknown) {
   const schema = toolSchemas[name as ToolName];
   if (!schema) throw new Error(`Unknown tool ${name}`);
