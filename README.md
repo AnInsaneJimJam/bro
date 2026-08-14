@@ -100,7 +100,7 @@ No provider password is requested or stored.
 
 1. Enable YouTube Data API v3 in Google Cloud.
 2. Create a Web application OAuth client and register `GOOGLE_REDIRECT_URI` exactly.
-3. Configure the minimum scopes in `.env`; Bro currently needs owned-channel read, comments, and upload capabilities.
+3. Configure the minimum scopes in `.env`; Bro currently needs owned-channel read, comment retrieval (`youtube.force-ssl`), and upload capabilities.
 4. Add test users during development. Complete OAuth verification before serving users outside the test list.
 5. Monitor quota: search, upload, and comment methods have different costs. Bro uses bounded/manual sync rather than aggressive polling.
 
