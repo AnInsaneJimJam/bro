@@ -348,18 +348,10 @@ function Scripts() {
   );
 }
 function Videos() {
-  type Cue = {
-    text: string;
-    start: number;
-    end: number;
-    style?: Record<string, unknown>;
-  };
   const input = useRef<HTMLInputElement>(null),
     video = useRef<HTMLVideoElement>(null),
-    [cues, setCues] = useState<Cue[]>([]),
     [projectId, setProjectId] = useState(''),
     [projectState, setProjectState] = useState(''),
-    [updatedAt, setUpdatedAt] = useState(''),
     [status, setStatus] = useState('Loading your latest video project…'),
     [preview, setPreview] = useState(''),
     [youtubeEnabled, setYoutubeEnabled] = useState(true),
@@ -369,20 +361,7 @@ function Videos() {
     [youtubeVisibility, setYoutubeVisibility] = useState<
       'public' | 'unlisted' | 'private'
     >('unlisted'),
-    [instagramCaption, setInstagramCaption] = useState(''),
-    [style, setStyle] = useState({
-      fontSize: 58,
-      textColor: '#ffffff',
-      outline: 4,
-      verticalPosition: 'bottom',
-    });
-  const validation = cues.flatMap((cue, i) =>
-    cue.start < 0 || cue.end <= cue.start
-      ? [`Cue ${i + 1} needs a positive duration.`]
-      : i > 0 && cue.start < cues[i - 1]!.end
-        ? [`Cue ${i + 1} overlaps cue ${i}.`]
-        : []
-  );
+    [instagramCaption, setInstagramCaption] = useState('');
   useEffect(() => {
     void loadLatestProject();
   }, []);
@@ -474,24 +453,13 @@ function Videos() {
       setStatus('Upload a video first.');
       return;
     }
-    const r = await fetch(`/api/videos/${targetProjectId}/captions`),
+    const r = await fetch(`/api/videos/${targetProjectId}/status`),
       d = await r.json();
     if (!r.ok) {
       setStatus(d.error);
       return;
     }
-    setCues(
-      (Array.isArray(d.cues) ? d.cues : []).map((c: Cue) => ({
-        text: c.text,
-        start: c.start,
-        end: c.end,
-        style: c.style,
-      }))
-    );
     setProjectState(d.project.state || '');
-    if (d.cues[0]?.style)
-      setStyle((current) => ({ ...current, ...d.cues[0].style }));
-    setUpdatedAt(d.project.updatedAt);
     setStatus(
       d.demo
         ? 'Demo data — edits stay in this browser.'
@@ -516,56 +484,6 @@ function Videos() {
       response.ok
         ? 'Validation queued again. Bro will enable publishing when it is ready.'
         : data.error || 'Could not retry video validation.'
-    );
-  }
-  async function save() {
-    if (validation.length) {
-      setStatus(validation[0]!);
-      return;
-    }
-    if (!projectId) {
-      setStatus('Upload a video first.');
-      return;
-    }
-    if (projectId === 'demo') {
-      setStatus('Demo data — edits are not stored or rendered.');
-      return;
-    }
-    const r = await fetch(`/api/videos/${projectId}/captions`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          expectedUpdatedAt: updatedAt,
-          cues: cues.map((cue) => ({ ...cue, style })),
-        }),
-      }),
-      d = await r.json();
-    if (r.ok) {
-      setUpdatedAt(d.updatedAt);
-      setStatus('Caption draft saved.');
-    } else setStatus(d.error);
-  }
-  async function render() {
-    if (validation.length) {
-      setStatus(validation[0]!);
-      return;
-    }
-    if (!projectId) {
-      setStatus('Upload a video first.');
-      return;
-    }
-    if (projectId === 'demo') {
-      setStatus('Demo mode does not claim to render media.');
-      return;
-    }
-    const r = await fetch(`/api/videos/${projectId}/render`, {
-        method: 'POST',
-      }),
-      d = await r.json();
-    setStatus(
-      r.ok
-        ? 'Render queued. The worker will burn captions into a new MP4.'
-        : d.error
     );
   }
   async function publishNow() {
@@ -638,32 +556,6 @@ function Videos() {
     }
     setStatus('Publishing queued. Track each destination in Calendar.');
   }
-  function split(i: number) {
-    const cue = cues[i]!,
-      words = cue.text.trim().split(/\s+/),
-      half = Math.max(1, Math.floor(words.length / 2)),
-      mid = Number(((cue.start + cue.end) / 2).toFixed(3));
-    setCues([
-      ...cues.slice(0, i),
-      { ...cue, text: words.slice(0, half).join(' '), end: mid },
-      { ...cue, text: words.slice(half).join(' ') || '…', start: mid },
-      ...cues.slice(i + 1),
-    ]);
-  }
-  function merge(i: number) {
-    if (i >= cues.length - 1) return;
-    const current = cues[i]!,
-      next = cues[i + 1]!;
-    setCues([
-      ...cues.slice(0, i),
-      {
-        ...current,
-        text: `${current.text} ${next.text}`.trim(),
-        end: next.end,
-      },
-      ...cues.slice(i + 2),
-    ]);
-  }
   return (
     <Surface
       title="Upload & publish"
@@ -684,7 +576,7 @@ function Videos() {
         </>
       }
     >
-      <div className="caption-workspace">
+      <div className="publish-workspace">
         <div className="video-placeholder">
           {preview ? (
             <video ref={video} src={preview} controls playsInline />
