@@ -1,5 +1,8 @@
 import PgBoss from 'pg-boss';
-import { getDatabaseSslOptions } from '@bro/db';
+import {
+  databaseUrlWithExternalSslOptions,
+  getDatabaseSslOptions,
+} from '@bro/db';
 async function withBoss<T>(operation: (boss: PgBoss) => Promise<T>) {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString)
@@ -8,7 +11,10 @@ async function withBoss<T>(operation: (boss: PgBoss) => Promise<T>) {
     });
   const ssl = getDatabaseSslOptions();
   const boss = new PgBoss({
-    connectionString,
+    connectionString: databaseUrlWithExternalSslOptions(
+      connectionString,
+      Boolean(ssl)
+    ),
     ...(ssl ? { ssl } : {}),
   });
   await boss.start();

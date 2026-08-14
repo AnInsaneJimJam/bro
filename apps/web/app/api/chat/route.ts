@@ -5,10 +5,15 @@ import { requireUser } from '@/lib/auth';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { executeDemoTool } from '@/lib/demo-tools';
 import { jsonError } from '@/lib/http';
-import { runResponsesToolLoop } from '@bro/ai/responses-loop';
+import {
+  runGeminiToolLoop,
+  runResponsesToolLoop,
+  type ToolExecutor,
+} from '@bro/ai/responses-loop';
 import { executeToolThroughOwnedRoutes } from '@/lib/tool-api';
 import { chatMessages, chatThreads, createDatabase } from '@bro/db';
 import { executeAuditedTool } from '@/lib/tool-audit';
+import { textProviderConfig } from '@/lib/text-ai';
 const input = z.object({
   message: z.string().min(1).max(4000),
   threadId: z.string().uuid().optional(),
@@ -20,12 +25,7 @@ export async function POST(req: Request) {
     enforceRateLimit(`chat:${user.id}`, 20, 60_000);
     const { message, threadId } = input.parse(await req.json());
     if (!user.demo) {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey)
-        return NextResponse.json(
-          { error: 'OpenAI is not configured' },
-          { status: 503 }
-        );
+      const ai = textProviderConfig();
       const database = createDatabase();
       close = database.close;
       let ownedThreadId = threadId;
@@ -54,25 +54,33 @@ export async function POST(req: Request) {
       await database.db
         .insert(chatMessages)
         .values({ threadId: ownedThreadId, role: 'user', content: message });
-      const result = await runResponsesToolLoop({
-        apiKey,
-        model: process.env.OPENAI_TEXT_MODEL || 'gpt-5.6-luna',
-        message,
-        executor: async (name, args, context) => {
-          const validated = validateToolCall(name, args) as Record<
-            string,
-            unknown
-          >;
-          return executeAuditedTool({
-            database,
-            userId: user.id,
-            name,
-            args: validated,
-            callId: context.callId,
-            execute: () => executeToolThroughOwnedRoutes(req, name, validated),
-          });
-        },
-      });
+      const execute: ToolExecutor = async (name, args, context) => {
+        const validated = validateToolCall(name, args) as Record<
+          string,
+          unknown
+        >;
+        return executeAuditedTool({
+          database,
+          userId: user.id,
+          name,
+          args: validated,
+          callId: context.callId,
+          execute: () => executeToolThroughOwnedRoutes(req, name, validated),
+        });
+      };
+      const result = await (ai.provider === 'gemini'
+        ? runGeminiToolLoop({
+            apiKey: ai.apiKey,
+            model: ai.model,
+            message,
+            executor: execute,
+          })
+        : runResponsesToolLoop({
+            apiKey: ai.apiKey,
+            model: ai.model,
+            message,
+            executor: execute,
+          }));
       const confirmations = result.toolResults
         .map((item) => item.result)
         .filter(

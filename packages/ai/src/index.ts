@@ -4,6 +4,16 @@ export * from './transcription';
 export * from './text-provider';
 const id = z.string().uuid();
 const providers = z.array(z.enum(['youtube', 'instagram'])).min(1);
+const publishMetadata = z.object({
+  youtube: z
+    .object({
+      title: z.string().min(1).max(100),
+      description: z.string().max(5000).default(''),
+      visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
+    })
+    .optional(),
+  instagram: z.object({ caption: z.string().max(2200).default('') }).optional(),
+});
 export const toolSchemas = {
   get_creator_profile: z.object({}),
   get_connection_status: z.object({
@@ -40,12 +50,17 @@ export const toolSchemas = {
   }),
   transcribe_video_for_captions: z.object({ projectId: id }),
   render_captioned_video: z.object({ projectId: id }),
-  publish_video_now: z.object({ projectId: id, platforms: providers }),
+  publish_video_now: z.object({
+    projectId: id,
+    platforms: providers,
+    metadata: publishMetadata,
+  }),
   schedule_video_publish: z.object({
     projectId: id,
     platforms: providers,
     localDateTime: z.string(),
     timeZone: z.string(),
+    metadata: publishMetadata,
   }),
   reschedule_publish_job: z.object({
     jobId: id,

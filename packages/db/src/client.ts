@@ -13,6 +13,17 @@ export function getDatabaseSslOptions(
   };
 }
 
+export function databaseUrlWithExternalSslOptions(
+  databaseUrl: string,
+  externalSslOptions: boolean
+) {
+  if (!externalSslOptions) return databaseUrl;
+  const parsed = new URL(databaseUrl);
+  parsed.searchParams.delete('sslmode');
+  parsed.searchParams.delete('uselibpqcompat');
+  return parsed.toString();
+}
+
 export function createDatabase(url = process.env.DATABASE_URL) {
   if (!url)
     throw Object.assign(new Error('DATABASE_URL is not configured'), {

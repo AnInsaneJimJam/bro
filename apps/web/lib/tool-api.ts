@@ -76,6 +76,7 @@ export async function executeToolThroughOwnedRoutes(
         projectId: a.projectId,
         providers: a.platforms,
         mode: 'now',
+        metadata: a.metadata,
       }),
     },
     schedule_video_publish: {
@@ -87,6 +88,7 @@ export async function executeToolThroughOwnedRoutes(
         mode: 'schedule',
         localDateTime: a.localDateTime,
         timeZone: a.timeZone,
+        metadata: a.metadata,
       }),
     },
     list_publish_jobs: {
