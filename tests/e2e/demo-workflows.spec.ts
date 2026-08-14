@@ -60,14 +60,14 @@ test('chat asks for missing script duration instead of guessing', async ({
   ).toBeVisible();
 });
 
-test('chat routes the latest-video caption command', async ({ page }) => {
+test('chat explains that subtitle editing is deferred', async ({ page }) => {
   await page.goto('/app');
   const composer = page.getByPlaceholder(/Ask Bro/);
   await composer.fill('Create captions for my latest uploaded video');
   await composer.press('Enter');
   await expect(
     page.getByText(
-      'The labeled demo video has editable caption cues ready in Videos.'
+      'Subtitle editing is not enabled yet. Upload and publish the original video now; caption tools are planned for a later update.'
     )
   ).toBeVisible();
 });
