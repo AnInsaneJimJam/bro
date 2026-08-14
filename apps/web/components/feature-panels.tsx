@@ -1447,7 +1447,14 @@ function Connections() {
   );
 }
 function Settings() {
+  type Check = {
+    key: string;
+    label: string;
+    status: 'ready' | 'missing' | 'optional';
+    detail: string;
+  };
   const [values, setValues] = useState({ youtube: false, instagram: false }),
+    [checks, setChecks] = useState<Check[]>([]),
     [message, setMessage] = useState('');
   useEffect(() => {
     fetch('/api/settings/auto-publish')
@@ -1455,6 +1462,9 @@ function Settings() {
       .then((d) =>
         setValues({ youtube: !!d.youtube, instagram: !!d.instagram })
       );
+    fetch('/api/system/status')
+      .then((r) => r.json())
+      .then((d) => setChecks(Array.isArray(d.checks) ? d.checks : []));
   }, []);
   async function change(provider: 'youtube' | 'instagram', enabled: boolean) {
     if (
@@ -1514,6 +1524,31 @@ function Settings() {
       title="Settings"
       subtitle="Publishing remains creator-controlled and defaults to confirmation."
     >
+      <section className="settings-section">
+        <h3>System readiness</h3>
+        <p>
+          These checks expose configuration state only; credentials and tokens
+          are never shown in the browser.
+        </p>
+        <div className="system-checks">
+          {checks.map((check) => (
+            <div className="system-check" key={check.key}>
+              <span
+                className={
+                  check.status === 'ready'
+                    ? 'system-check-dot ready'
+                    : 'system-check-dot missing'
+                }
+              />
+              <div>
+                <strong>{check.label}</strong>
+                <small>{check.detail}</small>
+              </div>
+              <em>{check.status === 'ready' ? 'Ready' : 'Setup needed'}</em>
+            </div>
+          ))}
+        </div>
+      </section>
       <section className="settings-section">
         <h3>Auto-publish</h3>
         <p>

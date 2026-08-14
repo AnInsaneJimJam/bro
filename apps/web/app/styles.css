@@ -1961,6 +1961,45 @@ header p {
   color: var(--coral);
   margin-left: 15px;
 }
+.system-checks {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.system-check {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.system-check > div {
+  display: grid;
+  gap: 3px;
+}
+.system-check small {
+  color: var(--muted);
+}
+.system-check em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.system-check-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.system-check-dot.ready {
+  background: #3d9b70;
+}
+.system-check-dot.missing {
+  background: var(--coral);
+}
 .setting-row {
   display: flex;
   justify-content: space-between;
