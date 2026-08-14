@@ -248,6 +248,7 @@ export class YouTubeAdapter
         // still surfacing authorization/quota failures to the job boundary.
         if (
           error instanceof Error &&
+          (error as { httpStatus?: number }).httpStatus === 403 &&
           /\bcommentsDisabled\b/.test(
             String((error as { reason?: unknown }).reason || '')
           )
