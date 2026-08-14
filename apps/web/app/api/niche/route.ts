@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import OpenAI from 'openai';
-import { zodTextFormat } from 'openai/helpers/zod';
 import { and, desc, eq, ne } from 'drizzle-orm';
-import { nicheOutput } from '@bro/ai';
+import { generateStructuredText, nicheOutput } from '@bro/ai';
 import { creatorContentItems, createDatabase, nicheVersions } from '@bro/db';
 import { requireUser } from '@/lib/auth';
 import { demoStore } from '@/lib/demo-store';
 import { jsonError } from '@/lib/http';
+import { textProviderConfig } from '@/lib/text-ai';
 
 const requestSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('infer') }),
@@ -128,30 +127,13 @@ export async function POST(request: Request) {
         .returning();
       return NextResponse.json({ ...proposal, insufficientData: true });
     }
-    const key = process.env.OPENAI_API_KEY;
-    if (!key)
-      throw Object.assign(
-        new Error('OpenAI niche inference is not configured'),
-        { status: 503 }
-      );
-    const response = await new OpenAI({ apiKey: key }).responses.parse({
-      model: process.env.OPENAI_TEXT_MODEL || 'gpt-5.6-luna',
-      input: [
-        {
-          role: 'system',
-          content:
-            'Infer an English-language creator niche only from the supplied bounded owned-content records. Cite source IDs exactly. If evidence is weak, set insufficientData true. Never invent content.',
-        },
-        { role: 'user', content: JSON.stringify(items) },
-      ],
-      text: { format: zodTextFormat(nicheOutput, 'creator_niche') },
+    const result = await generateStructuredText(textProviderConfig(), {
+      schema: nicheOutput,
+      schemaName: 'creator_niche',
+      system:
+        'Infer an English-language creator niche only from the supplied bounded owned-content records. Cite source IDs exactly. If evidence is weak, set insufficientData true. Never invent content.',
+      user: JSON.stringify(items),
     });
-    const result = response.output_parsed;
-    if (!result)
-      throw Object.assign(
-        new Error('The niche model returned no validated result'),
-        { status: 502 }
-      );
     const [proposal] = await database.db
       .insert(nicheVersions)
       .values({

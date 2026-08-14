@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import OpenAI from 'openai';
-import { zodTextFormat } from 'openai/helpers/zod';
 import { and, desc, eq } from 'drizzle-orm';
-import { shortScriptOutput } from '@bro/ai';
+import { generateStructuredText, shortScriptOutput } from '@bro/ai';
 import {
   createDatabase,
   scripts,
@@ -14,6 +12,7 @@ import {
 import { requireUser } from '@/lib/auth';
 import { demoStore } from '@/lib/demo-store';
 import { jsonError } from '@/lib/http';
+import { textProviderConfig } from '@/lib/text-ai';
 
 const create = z.object({
   topicId: z.string().uuid(),
@@ -76,12 +75,6 @@ export async function POST(request: Request) {
         demoStore.generateScript(body.topicId, body.duration, body.angle),
         { status: 201 }
       );
-    const key = process.env.OPENAI_API_KEY;
-    if (!key)
-      throw Object.assign(
-        new Error('OpenAI script generation is not configured'),
-        { status: 503 }
-      );
     const database = createDatabase();
     close = database.close;
     const [topic] = await database.db
@@ -105,35 +98,18 @@ export async function POST(request: Request) {
       throw Object.assign(new Error('Owned topic opportunity not found'), {
         status: 404,
       });
-    const response = await new OpenAI({ apiKey: key }).responses.parse({
-      model:
-        process.env.OPENAI_SCRIPT_MODEL ||
-        process.env.OPENAI_TEXT_MODEL ||
-        'gpt-5.6-luna',
-      input: [
-        {
-          role: 'system',
-          content:
-            'Write a concise English vertical short-form video script. Stay grounded in the supplied opportunity references and meet the requested duration. Return platform metadata only for requested platforms.',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            ...topic,
-            targetDuration: body.duration,
-            platforms: body.platforms,
-            requestedAngle: body.angle,
-          }),
-        },
-      ],
-      text: { format: zodTextFormat(shortScriptOutput, 'short_script') },
+    const result = await generateStructuredText(textProviderConfig('script'), {
+      schema: shortScriptOutput,
+      schemaName: 'short_script',
+      system:
+        'Write a concise English vertical short-form video script. Stay grounded in the supplied opportunity references and meet the requested duration. Return platform metadata only for requested platforms.',
+      user: JSON.stringify({
+        ...topic,
+        targetDuration: body.duration,
+        platforms: body.platforms,
+        requestedAngle: body.angle,
+      }),
     });
-    const result = response.output_parsed;
-    if (!result)
-      throw Object.assign(
-        new Error('The script model returned no validated result'),
-        { status: 502 }
-      );
     const saved = await database.db.transaction(async (tx) => {
       const [script] = await tx
         .insert(scripts)

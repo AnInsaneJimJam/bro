@@ -5,6 +5,12 @@ export const jobSchemas = {
     providers: z.array(z.enum(['youtube', 'instagram', 'reddit'])),
     correlationId: z.string(),
   }),
+  'validate-video': z.object({
+    userId: z.string().uuid(),
+    projectId: z.string().uuid(),
+    originalObjectKey: z.string(),
+    correlationId: z.string(),
+  }),
   'transcribe-video': z.object({
     userId: z.string().uuid(),
     projectId: z.string().uuid(),

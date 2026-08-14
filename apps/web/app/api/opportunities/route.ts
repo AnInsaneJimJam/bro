@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { and, desc, eq, gt } from 'drizzle-orm';
 import { decryptSecret, scoreTrend } from '@bro/core';
-import { topicOpportunityOutput } from '@bro/ai';
+import { generateStructuredText, topicOpportunityOutput } from '@bro/ai';
 import {
   createDatabase,
   getConnectionSecrets,
@@ -22,6 +20,7 @@ import {
 import { requireUser } from '@/lib/auth';
 import { demoStore } from '@/lib/demo-store';
 import { jsonError } from '@/lib/http';
+import { textProviderConfig } from '@/lib/text-ai';
 
 export async function GET(request: Request) {
   let close: (() => Promise<void>) | undefined;
@@ -107,17 +106,11 @@ export async function POST(request: Request) {
         items: demoStore.opportunities(body.count),
         mode: 'demo',
       });
-    const keyRaw = process.env.TOKEN_ENCRYPTION_KEY,
-      aiKey = process.env.OPENAI_API_KEY;
+    const keyRaw = process.env.TOKEN_ENCRYPTION_KEY;
     if (!keyRaw)
       throw Object.assign(new Error('Token encryption is not configured'), {
         status: 503,
       });
-    if (!aiKey)
-      throw Object.assign(
-        new Error('OpenAI opportunity clustering is not configured'),
-        { status: 503 }
-      );
     const database = createDatabase();
     close = database.close;
     const [[profile], [niche]] = await Promise.all([
@@ -243,32 +236,16 @@ export async function POST(request: Request) {
         };
       return { ...signal, components, score: scoreTrend(components) };
     });
-    const response = await new OpenAI({ apiKey: aiKey }).responses.parse({
-      model: process.env.OPENAI_TEXT_MODEL || 'gpt-5.6-luna',
-      input: [
-        {
-          role: 'system',
-          content: `Cluster near-duplicate creator topic signals into ${body.count} or fewer useful English opportunity cards. Use only supplied signal IDs as evidence. State a caveat for single-source or weak evidence.`,
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            niche: niche.label,
-            countryCode,
-            signals: scored,
-          }),
-        },
-      ],
-      text: {
-        format: zodTextFormat(topicOpportunityOutput, 'topic_opportunities'),
-      },
+    const clustered = await generateStructuredText(textProviderConfig(), {
+      schema: topicOpportunityOutput,
+      schemaName: 'topic_opportunities',
+      system: `Cluster near-duplicate creator topic signals into ${body.count} or fewer useful English opportunity cards. Use only supplied signal IDs as evidence. State a caveat for single-source or weak evidence.`,
+      user: JSON.stringify({
+        niche: niche.label,
+        countryCode,
+        signals: scored,
+      }),
     });
-    const clustered = response.output_parsed;
-    if (!clustered)
-      throw Object.assign(
-        new Error('The opportunity model returned no validated result'),
-        { status: 502 }
-      );
     const allowed = new Set(scored.map((signal) => signal.externalId));
     for (const item of clustered.items)
       if (item.evidenceIds.some((id) => !allowed.has(id)))

@@ -139,8 +139,8 @@ export async function POST(request: Request) {
           )
         ),
     ]);
-    if (!profile || !project?.renderedKey || project.state !== 'ready')
-      throw new Error('A ready rendered video is required');
+    if (!profile || !project?.originalKey || project.state !== 'ready')
+      throw new Error('A validated, publish-ready video is required');
     const [script] = project.scriptId
       ? await database.db
           .select()

@@ -24,22 +24,97 @@ import {
 import type { JobHandlers } from './jobs';
 export function createVideoHandlers(): Pick<
   JobHandlers,
-  'transcribe-video' | 'render-video'
+  'validate-video' | 'transcribe-video' | 'render-video'
 > {
   const url = required('NEXT_PUBLIC_SUPABASE_URL'),
     key = required('SUPABASE_SERVICE_ROLE_KEY'),
     storage = createClient(url, key, {
       auth: { persistSession: false },
-    }).storage,
-    openai = new OpenAI({ apiKey: required('OPENAI_API_KEY') }),
-    transcriber = new OpenAITranscriptionProvider(
-      openai,
-      process.env.OPENAI_COMMAND_TRANSCRIPTION_MODEL || 'gpt-transcribe',
-      process.env.OPENAI_CAPTION_TRANSCRIPTION_MODEL || 'whisper-1'
-    );
+    }).storage;
   return {
+    'validate-video': async (data) =>
+      withTemp(async (dir) => {
+        const database = createDatabase();
+        try {
+          const [project] = await database.db
+            .select()
+            .from(videoProjects)
+            .where(
+              and(
+                eq(videoProjects.id, data.projectId),
+                eq(videoProjects.userId, data.userId)
+              )
+            )
+            .limit(1);
+          if (
+            !project?.originalKey ||
+            project.originalKey !== data.originalObjectKey
+          )
+            throw new Error(
+              'Owned upload reference does not match the queued validation job'
+            );
+          const upload = (project.metadata || {}) as {
+              filename?: string;
+              mimeType?: string;
+              size?: number;
+            },
+            original = await download(
+              storage,
+              process.env.SUPABASE_ORIGINALS_BUCKET || 'bro-originals',
+              data.originalObjectKey
+            ),
+            inputPath = join(dir, 'original-upload');
+          await writeFile(inputPath, original);
+          const media = await probeVideo(inputPath),
+            detectedMime = detectedVideoMime(media.formatName);
+          validateUpload(
+            {
+              filename: upload.filename || 'uploaded-video',
+              declaredMime: upload.mimeType || 'application/octet-stream',
+              detectedMime,
+              size: original.length,
+              duration: media.duration,
+            },
+            {
+              maxBytes: Number(process.env.MAX_UPLOAD_BYTES || 52428800),
+              maxDuration: Number(process.env.MAX_VIDEO_DURATION_SECONDS || 60),
+            }
+          );
+          await database.db
+            .update(videoProjects)
+            .set({
+              metadata: {
+                ...upload,
+                ...media,
+                detectedMimeType: detectedMime,
+                size: original.length,
+              },
+              state: 'ready',
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(videoProjects.id, data.projectId),
+                eq(videoProjects.userId, data.userId)
+              )
+            );
+          return {
+            size: original.length,
+            duration: media.duration,
+            detectedMimeType: detectedMime,
+          };
+        } finally {
+          await database.close();
+        }
+      }),
     'transcribe-video': async (data) =>
       withTemp(async (dir) => {
+        const openai = new OpenAI({ apiKey: required('OPENAI_API_KEY') }),
+          transcriber = new OpenAITranscriptionProvider(
+            openai,
+            process.env.OPENAI_COMMAND_TRANSCRIPTION_MODEL || 'gpt-transcribe',
+            process.env.OPENAI_CAPTION_TRANSCRIPTION_MODEL || 'whisper-1'
+          );
         const lookup = createDatabase();
         const [owned] = await lookup.db
           .select({

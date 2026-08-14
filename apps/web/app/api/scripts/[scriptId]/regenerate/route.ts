@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { createDatabase, scripts } from '@bro/db';
 import { requireUser } from '@/lib/auth';
 import { jsonError } from '@/lib/http';
+import { generateStructuredText } from '@bro/ai';
+import { textProviderConfig } from '@/lib/text-ai';
 
 const input = z.object({
     section: z.enum(['hook', 'beat', 'cta']),
@@ -38,12 +38,6 @@ export async function POST(
       .limit(1);
     if (!script)
       throw Object.assign(new Error('Owned script not found'), { status: 404 });
-    const key = process.env.OPENAI_API_KEY;
-    if (!key)
-      throw Object.assign(
-        new Error('OpenAI script regeneration is not configured'),
-        { status: 503 }
-      );
     const beats = (script.beats || []) as Array<{
         label: string;
         spoken: string;
@@ -55,37 +49,21 @@ export async function POST(
             ? script.cta
             : beats[body.beatIndex ?? -1]?.spoken;
     if (!current) throw new Error('Selected script section does not exist');
-    const response = await new OpenAI({ apiKey: key }).responses.parse({
-      model:
-        process.env.OPENAI_SCRIPT_MODEL ||
-        process.env.OPENAI_TEXT_MODEL ||
-        'gpt-5.6-luna',
-      input: [
-        {
-          role: 'system',
-          content:
-            'Rewrite only the selected short-form script section. Preserve factual grounding, target duration, and creator intent. Return a suggestion; application code decides whether to apply it.',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            title: script.title,
-            duration: script.duration,
-            section: body.section,
-            current,
-            instruction: body.instruction,
-            context: { hook: script.hook, beats, cta: script.cta },
-          }),
-        },
-      ],
-      text: { format: zodTextFormat(output, 'script_section_suggestion') },
+    const result = await generateStructuredText(textProviderConfig('script'), {
+      schema: output,
+      schemaName: 'script_section_suggestion',
+      system:
+        'Rewrite only the selected short-form script section. Preserve factual grounding, target duration, and creator intent. Return a suggestion; application code decides whether to apply it.',
+      user: JSON.stringify({
+        title: script.title,
+        duration: script.duration,
+        section: body.section,
+        current,
+        instruction: body.instruction,
+        context: { hook: script.hook, beats, cta: script.cta },
+      }),
     });
-    if (!response.output_parsed)
-      throw Object.assign(
-        new Error('The model returned no validated suggestion'),
-        { status: 502 }
-      );
-    return NextResponse.json(response.output_parsed);
+    return NextResponse.json(result);
   } catch (error) {
     return jsonError(error);
   } finally {

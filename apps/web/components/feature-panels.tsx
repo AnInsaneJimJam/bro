@@ -361,6 +361,11 @@ function Videos() {
     [updatedAt, setUpdatedAt] = useState(''),
     [status, setStatus] = useState('Loading your latest video project…'),
     [preview, setPreview] = useState(''),
+    [youtubeEnabled, setYoutubeEnabled] = useState(true),
+    [instagramEnabled, setInstagramEnabled] = useState(true),
+    [youtubeTitle, setYoutubeTitle] = useState(''),
+    [youtubeDescription, setYoutubeDescription] = useState(''),
+    [instagramCaption, setInstagramCaption] = useState(''),
     [style, setStyle] = useState({
       fontSize: 58,
       textColor: '#ffffff',
@@ -386,7 +391,7 @@ function Videos() {
     }
     const latest = Array.isArray(projects) ? projects[0] : undefined;
     if (!latest) {
-      setStatus('Upload a video to create word-timed captions.');
+      setStatus('Upload a video to publish it to YouTube and Instagram.');
       return;
     }
     setProjectId(latest.id);
@@ -445,7 +450,7 @@ function Videos() {
     const media = await fetch(`/api/videos/${created.projectId}/media`),
       signedMedia = await media.json();
     if (media.ok) setPreview(signedMedia.url);
-    setStatus('Queued for metadata extraction and timestamped transcription.');
+    setStatus('Upload complete. Bro is validating the video for publishing.');
   }
   async function refresh(targetProjectId = projectId) {
     if (!targetProjectId) {
@@ -530,6 +535,70 @@ function Videos() {
         : d.error
     );
   }
+  async function publishNow() {
+    if (!projectId) {
+      setStatus('Upload and validate a video first.');
+      return;
+    }
+    const providers = [
+      ...(youtubeEnabled ? (['youtube'] as const) : []),
+      ...(instagramEnabled ? (['instagram'] as const) : []),
+    ];
+    if (!providers.length) {
+      setStatus('Choose YouTube, Instagram, or both.');
+      return;
+    }
+    if (youtubeEnabled && !youtubeTitle.trim()) {
+      setStatus('Add a YouTube title before publishing.');
+      return;
+    }
+    const response = await fetch('/api/publish', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          providers,
+          mode: 'now',
+          metadata: {
+            youtube: youtubeEnabled
+              ? {
+                  title: youtubeTitle.trim(),
+                  description: youtubeDescription.trim(),
+                  visibility: 'public',
+                }
+              : undefined,
+            instagram: instagramEnabled
+              ? { caption: instagramCaption.trim() }
+              : undefined,
+          },
+        }),
+      }),
+      data = await response.json();
+    if (!response.ok) {
+      setStatus(data.error || 'Could not create the publish job.');
+      return;
+    }
+    if (data.requiresConfirmation) {
+      const approved = confirm(
+        `Publish ${data.card.mediaName} to ${data.card.providers.join(' + ')} now?`
+      );
+      if (!approved) {
+        setStatus('Publish job is awaiting your confirmation.');
+        return;
+      }
+      const confirmation = await fetch(`/api/publish/${data.jobId}/confirm`, {
+          method: 'POST',
+        }),
+        result = await confirmation.json();
+      setStatus(
+        confirmation.ok
+          ? 'Publishing queued. Track each destination in Calendar.'
+          : result.error || 'Could not confirm publishing.'
+      );
+      return;
+    }
+    setStatus('Publishing queued. Track each destination in Calendar.');
+  }
   function split(i: number) {
     const cue = cues[i]!,
       words = cue.text.trim().split(/\s+/),
@@ -558,8 +627,8 @@ function Videos() {
   }
   return (
     <Surface
-      title="Videos & captions"
-      subtitle="Upload directly to private storage, then edit timestamped English captions before rendering."
+      title="Upload & publish"
+      subtitle="Upload once, then publish the original video to YouTube Shorts, Instagram Reels, or both."
       action={
         <>
           <input
@@ -590,157 +659,71 @@ function Videos() {
           {projectId && projectId !== 'demo' && (
             <button onClick={() => refresh()}>
               <RefreshCw />
-              Refresh captions
+              Refresh status
             </button>
           )}
         </div>
         <div className="cue-editor">
           <header>
-            <strong>Caption cues</strong>
-            <span>High-contrast default · bottom</span>
+            <strong>Post details</strong>
+            <span>Each platform keeps its own metadata</span>
           </header>
-          <div className="caption-style">
+          <label>
+            <input
+              type="checkbox"
+              checked={youtubeEnabled}
+              onChange={(event) => setYoutubeEnabled(event.target.checked)}
+            />{' '}
+            Publish to YouTube Shorts
+          </label>
+          {youtubeEnabled && (
+            <>
+              <label>
+                YouTube title
+                <input
+                  value={youtubeTitle}
+                  maxLength={100}
+                  onChange={(event) => setYoutubeTitle(event.target.value)}
+                  placeholder="A clear title for your Short"
+                />
+              </label>
+              <label>
+                YouTube description
+                <textarea
+                  value={youtubeDescription}
+                  onChange={(event) =>
+                    setYoutubeDescription(event.target.value)
+                  }
+                  placeholder="Description, links, and hashtags"
+                />
+              </label>
+            </>
+          )}
+          <label>
+            <input
+              type="checkbox"
+              checked={instagramEnabled}
+              onChange={(event) => setInstagramEnabled(event.target.checked)}
+            />{' '}
+            Publish to Instagram Reels
+          </label>
+          {instagramEnabled && (
             <label>
-              Size
-              <input
-                type="number"
-                min="28"
-                max="96"
-                value={style.fontSize}
-                onChange={(e) =>
-                  setStyle({ ...style, fontSize: Number(e.target.value) })
-                }
-              />
-            </label>
-            <label>
-              Text
-              <input
-                type="color"
-                value={style.textColor}
-                onChange={(e) =>
-                  setStyle({ ...style, textColor: e.target.value })
-                }
-              />
-            </label>
-            <label>
-              Outline
-              <input
-                type="number"
-                min="0"
-                max="10"
-                value={style.outline}
-                onChange={(e) =>
-                  setStyle({ ...style, outline: Number(e.target.value) })
-                }
-              />
-            </label>
-            <label>
-              Position
-              <select
-                value={style.verticalPosition}
-                onChange={(e) =>
-                  setStyle({ ...style, verticalPosition: e.target.value })
-                }
-              >
-                <option>top</option>
-                <option>middle</option>
-                <option>bottom</option>
-              </select>
-            </label>
-          </div>
-          {cues.map((cue, i) => (
-            <div
-              className="cue"
-              key={i}
-              onClick={() => {
-                if (video.current) video.current.currentTime = cue.start;
-              }}
-            >
-              <span>{i + 1}</span>
+              Instagram caption
               <textarea
-                value={cue.text}
-                onChange={(e) =>
-                  setCues(
-                    cues.map((c, n) =>
-                      n === i ? { ...c, text: e.target.value } : c
-                    )
-                  )
-                }
+                value={instagramCaption}
+                onChange={(event) => setInstagramCaption(event.target.value)}
+                placeholder="Caption and hashtags for your Reel"
               />
-              <label>
-                Start
-                <input
-                  type="number"
-                  step="0.1"
-                  value={cue.start}
-                  onChange={(e) =>
-                    setCues(
-                      cues.map((c, n) =>
-                        n === i ? { ...c, start: Number(e.target.value) } : c
-                      )
-                    )
-                  }
-                />
-              </label>
-              <label>
-                End
-                <input
-                  type="number"
-                  step="0.1"
-                  value={cue.end}
-                  onChange={(e) =>
-                    setCues(
-                      cues.map((c, n) =>
-                        n === i ? { ...c, end: Number(e.target.value) } : c
-                      )
-                    )
-                  }
-                />
-              </label>
-              <div className="cue-actions">
-                <button onClick={() => split(i)}>Split</button>
-                <button
-                  disabled={i === cues.length - 1}
-                  onClick={() => merge(i)}
-                >
-                  Merge
-                </button>
-                <button
-                  disabled={cues.length === 1}
-                  onClick={() => setCues(cues.filter((_, n) => n !== i))}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-          {validation.map((error) => (
-            <small className="cue-error" key={error}>
-              {error}
-            </small>
-          ))}
-          <button
-            onClick={() =>
-              setCues([
-                ...cues,
-                {
-                  text: 'New caption',
-                  start: cues.at(-1)?.end || 0,
-                  end: (cues.at(-1)?.end || 0) + 2,
-                },
-              ])
-            }
-          >
-            <Plus />
-            Add cue
+            </label>
+          )}
+          <button className="primary-small" onClick={publishNow}>
+            Publish now
           </button>
-          <button onClick={save}>
-            <Save />
-            Save draft
-          </button>
-          <button className="primary-small" onClick={render}>
-            Render captioned MP4
-          </button>
+          <small>
+            Scheduling is available in Calendar. Subtitle editing will be added
+            later and does not block publishing.
+          </small>
         </div>
       </div>
     </Surface>
@@ -777,6 +760,9 @@ function Calendar() {
       youtube: true,
       instagram: true,
     }),
+    [youtubeTitle, setYoutubeTitle] = useState(''),
+    [youtubeDescription, setYoutubeDescription] = useState(''),
+    [instagramCaption, setInstagramCaption] = useState(''),
     [message, setMessage] = useState('');
   async function load() {
     const [start, end] = [
@@ -809,11 +795,15 @@ function Calendar() {
       .filter(([, enabled]) => enabled)
       .map(([provider]) => provider);
     if (!projectId) {
-      setMessage('Choose a ready captioned video first.');
+      setMessage('Choose a validated, publish-ready video first.');
       return;
     }
     if (!providers.length) {
       setMessage('Choose at least one destination.');
+      return;
+    }
+    if (destinations.youtube && !youtubeTitle.trim()) {
+      setMessage('Add a YouTube title before scheduling.');
       return;
     }
     const response = await fetch('/api/publish', {
@@ -825,6 +815,18 @@ function Calendar() {
           mode: 'schedule',
           localDateTime: selected,
           timeZone: zone,
+          metadata: {
+            youtube: destinations.youtube
+              ? {
+                  title: youtubeTitle.trim(),
+                  description: youtubeDescription.trim(),
+                  visibility: 'public',
+                }
+              : undefined,
+            instagram: destinations.instagram
+              ? { caption: instagramCaption.trim() }
+              : undefined,
+          },
         }),
       }),
       data = await response.json();
@@ -1003,6 +1005,37 @@ function Calendar() {
             Instagram
           </label>
         </div>
+        {destinations.youtube && (
+          <label>
+            YouTube title
+            <input
+              value={youtubeTitle}
+              maxLength={100}
+              onChange={(event) => setYoutubeTitle(event.target.value)}
+              placeholder="Title for your Short"
+            />
+          </label>
+        )}
+        {destinations.youtube && (
+          <label>
+            YouTube description
+            <textarea
+              value={youtubeDescription}
+              onChange={(event) => setYoutubeDescription(event.target.value)}
+              placeholder="Description and hashtags"
+            />
+          </label>
+        )}
+        {destinations.instagram && (
+          <label>
+            Instagram caption
+            <textarea
+              value={instagramCaption}
+              onChange={(event) => setInstagramCaption(event.target.value)}
+              placeholder="Caption and hashtags"
+            />
+          </label>
+        )}
         <button onClick={schedule}>Review schedule</button>
       </div>
       {message && <small>{message}</small>}

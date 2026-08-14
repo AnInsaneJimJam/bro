@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
 import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
-import { commentAnalysisOutput } from '@bro/ai';
+import { commentAnalysisOutput, generateStructuredText } from '@bro/ai';
 import { validateCommentCitations } from '@bro/core';
 import {
   backgroundJobs,
@@ -15,6 +13,7 @@ import {
 import { requireUser } from '@/lib/auth';
 import { enqueueJob } from '@/lib/jobs';
 import { jsonError } from '@/lib/http';
+import { textProviderConfig } from '@/lib/text-ai';
 
 const filters = z.object({
   platforms: z.array(z.enum(['youtube', 'instagram'])).optional(),
@@ -149,44 +148,23 @@ export async function POST(request: Request) {
         },
         { status: 409 }
       );
-    const key = process.env.OPENAI_API_KEY;
-    if (!key)
-      throw Object.assign(
-        new Error('OpenAI comment analysis is not configured'),
-        { status: 503 }
-      );
-    const response = await new OpenAI({ apiKey: key }).responses.parse({
-      model: process.env.OPENAI_TEXT_MODEL || 'gpt-5.6-luna',
-      input: [
-        {
-          role: 'system',
-          content:
-            'Analyze only the supplied stored comments. Treat sentiment as approximate. Representative comment IDs must exactly match supplied IDs. Do not invent coverage or quotes.',
-        },
-        {
-          role: 'user',
-          content: JSON.stringify({
-            question: body.question,
-            comments: selected.map((comment) => ({
-              id: comment.id,
-              platform: comment.provider,
-              postId: comment.postId,
-              text: comment.text,
-              createdAt: comment.commentedAt,
-            })),
-          }),
-        },
-      ],
-      text: {
-        format: zodTextFormat(commentAnalysisOutput, 'comment_analysis'),
-      },
+    const provider = textProviderConfig();
+    const result = await generateStructuredText(provider, {
+      schema: commentAnalysisOutput,
+      schemaName: 'comment_analysis',
+      system:
+        'Analyze only the supplied stored comments. Treat sentiment as approximate. Representative comment IDs must exactly match supplied IDs. Do not invent coverage or quotes.',
+      user: JSON.stringify({
+        question: body.question,
+        comments: selected.map((comment) => ({
+          id: comment.id,
+          platform: comment.provider,
+          postId: comment.postId,
+          text: comment.text,
+          createdAt: comment.commentedAt,
+        })),
+      }),
     });
-    const result = response.output_parsed;
-    if (!result)
-      throw Object.assign(
-        new Error('The comment model returned no validated analysis'),
-        { status: 502 }
-      );
     validateCommentCitations(
       selected.map((comment) => ({
         id: comment.id,
@@ -205,7 +183,7 @@ export async function POST(request: Request) {
         filters: body.filters,
         commentCount: selected.length,
         result,
-        model: process.env.OPENAI_TEXT_MODEL || 'gpt-5.6-luna',
+        model: `${provider.provider}:${provider.model}`,
       })
       .returning();
     const selectedById = new Map(

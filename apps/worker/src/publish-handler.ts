@@ -51,16 +51,24 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
           .from(platformConnections)
           .where(eq(platformConnections.userId, data.userId)),
       ]);
-      if (!job || !project?.video_projects.renderedKey)
-        throw new Error('Owned publish job or rendered media not found');
+      const mediaKey =
+        project?.video_projects.renderedKey ||
+        project?.video_projects.originalKey;
+      if (!job || !project || !mediaKey)
+        throw new Error('Owned publish job or publishable media not found');
+      const usingRenderedMedia = Boolean(project.video_projects.renderedKey);
       const storage = createClient(
           required('NEXT_PUBLIC_SUPABASE_URL'),
           required('SUPABASE_SERVICE_ROLE_KEY'),
           { auth: { persistSession: false } }
         ).storage,
         { data: signed, error } = await storage
-          .from(process.env.SUPABASE_RENDERS_BUCKET || 'bro-renders')
-          .createSignedUrl(project.video_projects.renderedKey, 3600);
+          .from(
+            usingRenderedMedia
+              ? process.env.SUPABASE_RENDERS_BUCKET || 'bro-renders'
+              : process.env.SUPABASE_ORIGINALS_BUCKET || 'bro-originals'
+          )
+          .createSignedUrl(mediaKey, 3600);
       if (error || !signed?.signedUrl)
         throw new Error(
           error?.message || 'Could not create provider-fetchable media URL'
@@ -89,6 +97,7 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
       const projectMeta = project.video_projects.metadata as {
         size?: number;
         mimeType?: string;
+        detectedMimeType?: string;
         renderedSize?: number;
         renderedMimeType?: string;
       };
@@ -119,8 +128,14 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
               title: meta.title,
               caption: provider === 'youtube' ? meta.description : meta.caption,
               visibility: meta.visibility,
-              mimeType: projectMeta.renderedMimeType || 'video/mp4',
-              contentLength: projectMeta.renderedSize,
+              mimeType: usingRenderedMedia
+                ? projectMeta.renderedMimeType || 'video/mp4'
+                : projectMeta.detectedMimeType ||
+                  projectMeta.mimeType ||
+                  'video/mp4',
+              contentLength: usingRenderedMedia
+                ? projectMeta.renderedSize
+                : projectMeta.size,
             },
           };
         });

@@ -36,7 +36,11 @@ if (!databaseUrl) {
   });
   await boss.start();
   let videoHandlers:
-      Pick<JobHandlers, 'transcribe-video' | 'render-video'> | undefined,
+      | Pick<
+          JobHandlers,
+          'validate-video' | 'transcribe-video' | 'render-video'
+        >
+      | undefined,
     publishHandler: JobHandlers['publish-video'] | undefined,
     syncHandlers:
       Pick<JobHandlers, 'sync-content' | 'sync-comments'> | undefined;
@@ -68,7 +72,11 @@ if (!databaseUrl) {
           );
           await markJob(job.id, 'processing');
           try {
-            if (name === 'transcribe-video' || name === 'render-video') {
+            if (
+              name === 'validate-video' ||
+              name === 'transcribe-video' ||
+              name === 'render-video'
+            ) {
               videoHandlers ??= createVideoHandlers();
               await (
                 videoHandlers[name] as (data: unknown) => Promise<unknown>
@@ -192,7 +200,9 @@ async function markDomainFailure(
   const database = createDatabase();
   try {
     if (
-      (name === 'transcribe-video' || name === 'render-video') &&
+      (name === 'validate-video' ||
+        name === 'transcribe-video' ||
+        name === 'render-video') &&
       data.projectId
     )
       await database.db

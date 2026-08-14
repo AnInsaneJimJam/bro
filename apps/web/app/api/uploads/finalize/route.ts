@@ -43,14 +43,14 @@ export async function POST(req: Request) {
       .onConflictDoNothing({ target: videoProjects.id });
     const correlationId = crypto.randomUUID(),
       bossJobId = await enqueueJob(
-        'transcribe-video',
+        'validate-video',
         {
           userId: user.id,
           projectId: body.projectId,
           originalObjectKey: body.objectKey,
           correlationId,
         },
-        { singletonKey: `transcribe:${body.projectId}` }
+        { singletonKey: `validate:${body.projectId}` }
       );
     return NextResponse.json(
       { projectId: body.projectId, state: 'queued', bossJobId, correlationId },

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 export * from './command';
 export * from './transcription';
+export * from './text-provider';
 const id = z.string().uuid();
 const providers = z.array(z.enum(['youtube', 'instagram'])).min(1);
 export const toolSchemas = {
