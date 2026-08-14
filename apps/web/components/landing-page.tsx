@@ -56,9 +56,11 @@ export function LandingPage() {
           <a href="#what-bro-does">What Bro does</a>
         </nav>
         <div className="landing-nav-actions">
-          <a className="landing-button secondary" href="/app">
-            Try demo
-          </a>
+          {demo && (
+            <a className="landing-button secondary" href="/app">
+              Try demo
+            </a>
+          )}
           <a className="landing-button primary" href={connectHref}>
             Connect your accounts
           </a>
@@ -82,9 +84,11 @@ export function LandingPage() {
               <Instagram />
               Connect YouTube + Instagram
             </a>
-            <a className="landing-button secondary large" href="/app">
-              <Play /> Explore the demo
-            </a>
+            {demo && (
+              <a className="landing-button secondary large" href="/app">
+                <Play /> Explore the demo
+              </a>
+            )}
           </div>
           <small>
             <LockKeyhole /> Official APIs. Your approval before publishing.
@@ -221,9 +225,11 @@ export function LandingPage() {
           <Instagram />
           Connect YouTube + Instagram
         </a>
-        <a className="landing-text-link" href="/app">
-          Try the demo first <ArrowRight />
-        </a>
+        {demo && (
+          <a className="landing-text-link" href="/app">
+            Try the demo first <ArrowRight />
+          </a>
+        )}
         <small>
           <LockKeyhole /> Bro uses official OAuth. We never ask for your
           platform passwords.

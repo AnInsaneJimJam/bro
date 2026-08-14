@@ -37,7 +37,7 @@ export async function GET(
         userId: user.id,
         provider: provider as OAuthProvider,
         nonce,
-        returnTo: '/connections',
+        returnTo: '/onboarding?step=connections',
         issuedAt: Date.now(),
       },
       secret

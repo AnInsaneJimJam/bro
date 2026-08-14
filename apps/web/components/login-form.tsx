@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-export function LoginForm() {
+export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   async function submit(e: React.FormEvent) {
@@ -45,7 +45,7 @@ export function LoginForm() {
           </button>
         </form>
         {message && <div className="login-message">{message}</div>}
-        <a href="/onboarding">Continue with labeled demo data</a>
+        {demoMode && <a href="/onboarding">Continue with labeled demo data</a>}
       </div>
     </main>
   );
