@@ -25,7 +25,7 @@ pnpm install
 cp .env.example .env && pnpm dev
 ```
 
-Open `http://localhost:3000` and choose **Continue with labeled demo data**. Keep `NEXT_PUBLIC_DEMO_MODE=true`. Add only `OPENAI_API_KEY` if you want microphone commands to use real English transcription; typed commands and the rest of the demo work without it.
+Open `http://localhost:3000` and choose **Continue with labeled demo data**. Keep `NEXT_PUBLIC_DEMO_MODE=true`. Add `GEMINI_API_KEY` (or the optional OpenAI fallback) if you want microphone commands to use real English transcription; typed commands and the rest of the demo work without it.
 
 Suggested three-minute walkthrough:
 

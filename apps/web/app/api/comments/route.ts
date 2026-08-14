@@ -8,6 +8,7 @@ import {
   commentAnalysisRuns,
   comments,
   createDatabase,
+  platformConnections,
   socialPosts,
 } from '@bro/db';
 import { requireUser } from '@/lib/auth';
@@ -60,9 +61,36 @@ export async function GET(request: Request) {
     const database = createDatabase();
     close = database.close;
     const selected = await selectComments(database.db, user.id, parsed);
+    const connectionRows = await database.db
+      .select({
+        provider: platformConnections.provider,
+        metadata: platformConnections.metadata,
+      })
+      .from(platformConnections)
+      .where(
+        and(
+          eq(platformConnections.userId, user.id),
+          inArray(
+            platformConnections.provider,
+            parsed.platforms || ['youtube', 'instagram']
+          )
+        )
+      );
+    const metadataTimes = connectionRows.flatMap((row) => {
+      const value = (row.metadata as { lastCommentSyncAt?: unknown } | null)
+        ?.lastCommentSyncAt;
+      return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+        ? [new Date(value)]
+        : [];
+    });
+    const lastSyncedAt =
+      [
+        ...metadataTimes,
+        ...selected.flatMap((row) => (row.syncedAt ? [row.syncedAt] : [])),
+      ].sort((left, right) => right.getTime() - left.getTime())[0] || null;
     return NextResponse.json({
       sampleSize: selected.length,
-      lastSyncedAt: selected[0]?.syncedAt || null,
+      lastSyncedAt,
       items: selected,
     });
   } catch (error) {

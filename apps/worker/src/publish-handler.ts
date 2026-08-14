@@ -9,6 +9,7 @@ import {
   videoProjects,
 } from '@bro/db';
 import {
+  aggregatePublishResult,
   executePublishDestinations,
   InstagramAdapter,
   YouTubeAdapter,
@@ -101,44 +102,43 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
         renderedSize?: number;
         renderedMimeType?: string;
       };
-      const destinations: DestinationRecord[] = rows
-        .filter((row) =>
-          data.providers.includes(row.provider as 'youtube' | 'instagram')
-        )
-        .map((row) => {
-          const provider = row.provider as 'youtube' | 'instagram',
-            meta = row.metadata as {
-              title?: string;
-              description?: string;
-              visibility?: 'public' | 'unlisted' | 'private';
-              caption?: string;
-            };
-          return {
-            provider,
-            state: row.state as DestinationRecord['state'],
-            attempts: row.attemptCount || 0,
-            externalId: row.externalId || undefined,
-            url: row.url || undefined,
-            error: row.errorMessage || undefined,
-            metadata: {
-              idempotencyKey: `${job.id}:${provider}`,
-              provider,
-              mediaUrl: signed.signedUrl,
-              providerAccountId: accounts.get(provider),
-              title: meta.title,
-              caption: provider === 'youtube' ? meta.description : meta.caption,
-              visibility: meta.visibility,
-              mimeType: usingRenderedMedia
-                ? projectMeta.renderedMimeType || 'video/mp4'
-                : projectMeta.detectedMimeType ||
-                  projectMeta.mimeType ||
-                  'video/mp4',
-              contentLength: usingRenderedMedia
-                ? projectMeta.renderedSize
-                : projectMeta.size,
-            },
+      const allDestinations: DestinationRecord[] = rows.map((row) => {
+        const provider = row.provider as 'youtube' | 'instagram',
+          meta = row.metadata as {
+            title?: string;
+            description?: string;
+            visibility?: 'public' | 'unlisted' | 'private';
+            caption?: string;
           };
-        });
+        return {
+          provider,
+          state: row.state as DestinationRecord['state'],
+          attempts: row.attemptCount || 0,
+          externalId: row.externalId || undefined,
+          url: row.url || undefined,
+          error: row.errorMessage || undefined,
+          metadata: {
+            idempotencyKey: `${job.id}:${provider}`,
+            provider,
+            mediaUrl: signed.signedUrl,
+            providerAccountId: accounts.get(provider),
+            title: meta.title,
+            caption: provider === 'youtube' ? meta.description : meta.caption,
+            visibility: meta.visibility,
+            mimeType: usingRenderedMedia
+              ? projectMeta.renderedMimeType || 'video/mp4'
+              : projectMeta.detectedMimeType ||
+                projectMeta.mimeType ||
+                'video/mp4',
+            contentLength: usingRenderedMedia
+              ? projectMeta.renderedSize
+              : projectMeta.size,
+          },
+        };
+      });
+      const destinations = allDestinations.filter((destination) =>
+        data.providers.includes(destination.provider)
+      );
       if (destinations.length !== new Set(data.providers).size)
         throw Object.assign(
           new Error(
@@ -150,7 +150,7 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
         .update(publishJobs)
         .set({ state: 'processing', updatedAt: new Date() })
         .where(eq(publishJobs.id, job.id));
-      const result = await executePublishDestinations({
+      const execution = await executePublishDestinations({
         destinations,
         adapters: { youtube, instagram },
         persist: async (destination) => {
@@ -176,6 +176,7 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
             .where(eq(publishJobs.id, job.id));
         },
       });
+      const result = aggregatePublishResult(allDestinations, execution);
       await database.db.transaction(async (tx) => {
         await tx
           .update(publishJobs)

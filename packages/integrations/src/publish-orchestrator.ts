@@ -1,6 +1,7 @@
 import { aggregateDestinationState, type Destination } from '@bro/core';
 import type { PublishInput, PublishingAdapter } from './index';
 export type DestinationRecord = Destination & { metadata: PublishInput };
+
 export async function executePublishDestinations(input: {
   destinations: DestinationRecord[];
   adapters: Record<'youtube' | 'instagram', PublishingAdapter>;
@@ -43,5 +44,25 @@ export async function executePublishDestinations(input: {
   return {
     state: aggregateDestinationState(input.destinations),
     destinations: input.destinations,
+  };
+}
+
+export type PublishExecutionResult = Awaited<
+  ReturnType<typeof executePublishDestinations>
+>;
+
+/**
+ * A retry request may contain only failed destinations. Recompute the parent
+ * job state from the complete destination set so a previously published
+ * platform remains visible as partial success.
+ */
+export function aggregatePublishResult(
+  allDestinations: DestinationRecord[],
+  execution: PublishExecutionResult
+): PublishExecutionResult {
+  return {
+    ...execution,
+    state: aggregateDestinationState(allDestinations),
+    destinations: allDestinations,
   };
 }

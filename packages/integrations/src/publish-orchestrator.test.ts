@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  aggregatePublishResult,
   executePublishDestinations,
   type DestinationRecord,
 } from './publish-orchestrator';
@@ -53,5 +54,35 @@ describe('destination orchestration', () => {
     expect(second.state).toBe('published');
     expect(youtube).toHaveBeenCalledTimes(1);
     expect(instagram).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps partial success when a retry permanently fails', async () => {
+    const youtube: DestinationRecord = {
+        provider: 'youtube',
+        state: 'published',
+        attempts: 1,
+        externalId: 'yt',
+        metadata: metadata('youtube'),
+      },
+      instagram: DestinationRecord = {
+        provider: 'instagram',
+        state: 'failed_retryable',
+        attempts: 1,
+        metadata: metadata('instagram'),
+      };
+    const execution = await executePublishDestinations({
+      destinations: [instagram],
+      adapters: {
+        youtube: adapter(async () => ({ externalId: 'unused' })),
+        instagram: adapter(async () => {
+          throw Object.assign(new Error('permanent'), { retryable: false });
+        }),
+      },
+      persist: async () => {},
+    });
+    expect(execution.state).toBe('failed_permanent');
+    expect(aggregatePublishResult([youtube, instagram], execution).state).toBe(
+      'partially_published'
+    );
   });
 });

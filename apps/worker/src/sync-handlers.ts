@@ -141,6 +141,7 @@ export function createSyncHandlers(): Pick<
             .set({
               status: 'error',
               metadata: {
+                ...((row.metadata || {}) as Record<string, unknown>),
                 lastError:
                   error instanceof Error
                     ? error.message
@@ -166,47 +167,78 @@ export function createSyncHandlers(): Pick<
         );
       const summary: Record<string, number> = {};
       for (const provider of providers) {
-        const owned = posts.filter(
-          (post) => post.provider === provider && post.providerMediaId
-        );
-        if (!owned.length) {
-          summary[provider] = 0;
-          continue;
-        }
         const row = await connection(userId, provider),
           source = adapter(row) as ContentSourceAdapter & CommentAdapter;
-        const synced = await source.syncOwnedMediaComments({
-          connectionId: row.providerAccountId,
-          mediaIds: owned.map((post) => post.providerMediaId!),
-        });
-        const postByExternal = new Map(
-          owned.map((post) => [post.providerMediaId, post.id])
-        );
-        if (synced.length)
+        const syncedAt = new Date();
+        try {
+          const owned = posts.filter(
+            (post) => post.provider === provider && post.providerMediaId
+          );
+          const synced = owned.length
+            ? await source.syncOwnedMediaComments({
+                connectionId: row.providerAccountId,
+                mediaIds: owned.map((post) => post.providerMediaId!),
+              })
+            : [];
+          const postByExternal = new Map(
+            owned.map((post) => [post.providerMediaId, post.id])
+          );
+          const validComments = synced.filter((comment) =>
+            postByExternal.has(comment.mediaId)
+          );
+          if (validComments.length)
+            await database.db
+              .insert(comments)
+              .values(
+                validComments.map((comment) => ({
+                  userId,
+                  postId: postByExternal.get(comment.mediaId)!,
+                  providerCommentId: comment.externalId,
+                  text: comment.text,
+                  commentedAt: new Date(comment.createdAt),
+                  syncedAt,
+                  status: 'visible',
+                }))
+              )
+              .onConflictDoUpdate({
+                target: [comments.postId, comments.providerCommentId],
+                set: {
+                  text: sql`excluded.text`,
+                  commentedAt: sql`excluded.commented_at`,
+                  syncedAt: sql`excluded.synced_at`,
+                  status: 'visible',
+                  updatedAt: syncedAt,
+                },
+              });
           await database.db
-            .insert(comments)
-            .values(
-              synced.map((comment) => ({
-                userId,
-                postId: postByExternal.get(comment.mediaId)!,
-                providerCommentId: comment.externalId,
-                text: comment.text,
-                commentedAt: new Date(comment.createdAt),
-                syncedAt: new Date(),
-                status: 'visible',
-              }))
-            )
-            .onConflictDoUpdate({
-              target: [comments.postId, comments.providerCommentId],
-              set: {
-                text: sql`excluded.text`,
-                commentedAt: sql`excluded.commented_at`,
-                syncedAt: sql`excluded.synced_at`,
-                status: 'visible',
-                updatedAt: new Date(),
+            .update(platformConnections)
+            .set({
+              status: 'healthy',
+              metadata: {
+                ...((row.metadata || {}) as Record<string, unknown>),
+                lastCommentSyncAt: syncedAt.toISOString(),
               },
-            });
-        summary[provider] = synced.length;
+              updatedAt: syncedAt,
+            })
+            .where(eq(platformConnections.id, row.id));
+          summary[provider] = validComments.length;
+        } catch (error) {
+          await database.db
+            .update(platformConnections)
+            .set({
+              status: 'error',
+              metadata: {
+                ...((row.metadata || {}) as Record<string, unknown>),
+                lastCommentSyncError:
+                  error instanceof Error
+                    ? error.message
+                    : 'Comment sync failed',
+              },
+              updatedAt: new Date(),
+            })
+            .where(eq(platformConnections.id, row.id));
+          throw error;
+        }
       }
       return summary;
     },
