@@ -292,4 +292,50 @@ describe('publishing adapters', () => {
     });
     expect(calls.some((x) => x.includes('/acct/media?'))).toBe(false);
   });
+  it('keeps a successful Reel when the optional permalink lookup fails', async () => {
+    const http: HttpClient = async (url) => {
+      if (url.includes('/acct/media?')) return json({ id: 'container' });
+      if (url.includes('/container?')) return json({ status_code: 'FINISHED' });
+      if (url.includes('/acct/media_publish?'))
+        return json({ id: 'ig-published' });
+      if (url.includes('/ig-published?'))
+        return json({ error: 'temporary' }, 503);
+      return json({}, 404);
+    };
+    await expect(
+      new InstagramAdapter(
+        async () => 'token',
+        'v24.0',
+        http,
+        async () => {}
+      ).publish({
+        idempotencyKey: 'key',
+        provider: 'instagram',
+        providerAccountId: 'acct',
+        mediaUrl: 'https://media.test/video.mp4',
+        caption: 'Caption',
+      })
+    ).resolves.toEqual({ externalId: 'ig-published', url: undefined });
+  });
+  it('retains the Instagram container id when status polling fails', async () => {
+    const http: HttpClient = async (url) => {
+      if (url.includes('/acct/media?')) return json({ id: 'container' });
+      if (url.includes('/container?')) return json({ error: 'temporary' }, 503);
+      return json({}, 404);
+    };
+    await expect(
+      new InstagramAdapter(
+        async () => 'token',
+        'v24.0',
+        http,
+        async () => {}
+      ).publish({
+        idempotencyKey: 'key',
+        provider: 'instagram',
+        providerAccountId: 'acct',
+        mediaUrl: 'https://media.test/video.mp4',
+        caption: 'Caption',
+      })
+    ).rejects.toMatchObject({ externalId: 'container', retryable: true });
+  });
 });

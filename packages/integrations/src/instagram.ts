@@ -96,19 +96,25 @@ export class InstagramAdapter
       if (status === 'published') {
         if (!input.providerAccountId)
           throw new Error('Instagram professional account ID is required');
-        const published = await providerJson<{ id: string }>(
-          'instagram',
-          this.http,
-          await this.url(`${input.providerAccountId}/media_publish`, {
-            creation_id: input.existingExternalId,
-          }),
-          { method: 'POST' }
-        );
+        let published: { id: string };
+        try {
+          published = await providerJson<{ id: string }>(
+            'instagram',
+            this.http,
+            await this.url(`${input.providerAccountId}/media_publish`, {
+              creation_id: input.existingExternalId,
+            }),
+            { method: 'POST' }
+          );
+        } catch (error) {
+          attachExternalId(error, input.existingExternalId);
+          throw error;
+        }
         if (!published.id)
           throw new Error('Instagram did not return a published media ID');
         return {
           externalId: published.id,
-          url: await this.permalink(published.id),
+          url: await this.safePermalink(published.id),
         };
       }
       if (status === 'processing')
@@ -138,14 +144,21 @@ export class InstagramAdapter
       throw new Error('Instagram did not return a publishing container ID');
     let ready = false;
     for (let attempt = 0; attempt < 30; attempt++) {
-      const status = await this.getPublishStatus(created.id);
+      let status: Awaited<ReturnType<typeof this.getPublishStatus>>;
+      try {
+        status = await this.getPublishStatus(created.id);
+      } catch (error) {
+        attachExternalId(error, created.id);
+        throw error;
+      }
       if (status === 'published') {
         ready = true;
         break;
       }
       if (status === 'failed')
-        throw new Error(
-          'Instagram rejected or expired the publishing container'
+        throw Object.assign(
+          new Error('Instagram rejected or expired the publishing container'),
+          { retryable: false, externalId: created.id }
         );
       await this.sleep(Math.min(30_000, 2_000 * Math.pow(1.25, attempt)));
     }
@@ -154,20 +167,37 @@ export class InstagramAdapter
         new Error('Instagram container processing timed out'),
         { retryable: true, externalId: created.id }
       );
-    const published = await providerJson<{ id: string }>(
-      'instagram',
-      this.http,
-      await this.url(`${input.providerAccountId}/media_publish`, {
-        creation_id: created.id,
-      }),
-      { method: 'POST' }
-    );
+    let published: { id: string };
+    try {
+      published = await providerJson<{ id: string }>(
+        'instagram',
+        this.http,
+        await this.url(`${input.providerAccountId}/media_publish`, {
+          creation_id: created.id,
+        }),
+        { method: 'POST' }
+      );
+    } catch (error) {
+      attachExternalId(error, created.id);
+      throw error;
+    }
     if (!published.id)
       throw new Error('Instagram did not return a published media ID');
     return {
       externalId: published.id,
-      url: await this.permalink(published.id),
+      url: await this.safePermalink(published.id),
     };
+  }
+
+  private async safePermalink(mediaId: string) {
+    // A successful publish must remain successful if the optional permalink
+    // lookup is temporarily unavailable. Throwing here would make a retry
+    // create a second Reel even though the first one already exists.
+    try {
+      return await this.permalink(mediaId);
+    } catch {
+      return undefined;
+    }
   }
 
   private async permalink(mediaId: string) {
@@ -213,4 +243,8 @@ export class InstagramAdapter
     }
     return output;
   }
+}
+
+function attachExternalId(error: unknown, externalId: string) {
+  if (error && typeof error === 'object') Object.assign(error, { externalId });
 }

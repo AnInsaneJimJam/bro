@@ -353,6 +353,7 @@ function Videos() {
     [projectId, setProjectId] = useState(''),
     [projectState, setProjectState] = useState(''),
     [status, setStatus] = useState('Loading your latest video project…'),
+    [uploading, setUploading] = useState(false),
     [preview, setPreview] = useState(''),
     [youtubeEnabled, setYoutubeEnabled] = useState(true),
     [instagramEnabled, setInstagramEnabled] = useState(true),
@@ -393,60 +394,76 @@ function Videos() {
     await refresh(latest.id);
   }
   async function upload(file?: File) {
-    if (!file) return;
-    setStatus('Requesting a private signed upload…');
-    const signed = await fetch('/api/uploads/sign', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          filename: file.name,
-          mimeType: file.type,
-          size: file.size,
+    if (!file || uploading) return;
+    setUploading(true);
+    setPreview('');
+    setProjectState('');
+    try {
+      setStatus('Requesting a private signed upload…');
+      const signed = await fetch('/api/uploads/sign', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            mimeType: file.type,
+            size: file.size,
+          }),
         }),
-      }),
-      details = await signed.json();
-    if (!signed.ok) {
-      setStatus(details.error);
-      return;
-    }
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL,
-      key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) {
-      setStatus('Supabase browser configuration is missing.');
-      return;
-    }
-    const client = createClient(url, key),
-      result = await client.storage
-        .from(details.bucket)
-        .uploadToSignedUrl(details.objectKey, details.token, file, {
-          contentType: file.type,
-        });
-    if (result.error) {
-      setStatus(result.error.message);
-      return;
-    }
-    const finalized = await fetch('/api/uploads/finalize', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projectId: details.projectId,
-          objectKey: details.objectKey,
-          filename: file.name,
-          mimeType: file.type,
-          size: file.size,
+        details = await signed.json();
+      if (!signed.ok) {
+        setStatus(details.error || 'Bro could not start the upload.');
+        return;
+      }
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL,
+        key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!url || !key) {
+        setStatus('Supabase browser configuration is missing.');
+        return;
+      }
+      setStatus('Uploading the original video privately…');
+      const client = createClient(url, key),
+        result = await client.storage
+          .from(details.bucket)
+          .uploadToSignedUrl(details.objectKey, details.token, file, {
+            contentType: file.type,
+          });
+      if (result.error) {
+        setStatus(`Upload failed: ${result.error.message}`);
+        return;
+      }
+      setStatus('Upload received. Bro is validating the video for publishing…');
+      const finalized = await fetch('/api/uploads/finalize', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            projectId: details.projectId,
+            objectKey: details.objectKey,
+            filename: file.name,
+            mimeType: file.type,
+            size: file.size,
+          }),
         }),
-      }),
-      created = await finalized.json();
-    if (!finalized.ok) {
-      setStatus(created.error);
-      return;
+        created = await finalized.json();
+      if (!finalized.ok) {
+        setStatus(created.error || 'Bro could not finalize the upload.');
+        return;
+      }
+      setProjectId(created.projectId);
+      setProjectState(created.state || 'queued');
+      const media = await fetch(`/api/videos/${created.projectId}/media`),
+        signedMedia = await media.json();
+      if (media.ok) setPreview(signedMedia.url);
+      setStatus('Upload complete. Bro is validating the video for publishing.');
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? `Upload failed: ${error.message}`
+          : 'Upload failed. Check your connection and try again.'
+      );
+    } finally {
+      setUploading(false);
+      if (input.current) input.current.value = '';
     }
-    setProjectId(created.projectId);
-    setProjectState(created.state || 'queued');
-    const media = await fetch(`/api/videos/${created.projectId}/media`),
-      signedMedia = await media.json();
-    if (media.ok) setPreview(signedMedia.url);
-    setStatus('Upload complete. Bro is validating the video for publishing.');
   }
   async function refresh(targetProjectId = projectId) {
     if (!targetProjectId) {
@@ -571,7 +588,7 @@ function Videos() {
           />
           <button onClick={() => input.current?.click()}>
             <Upload />
-            Upload video
+            {uploading ? 'Uploading…' : 'Upload video'}
           </button>
         </>
       }
