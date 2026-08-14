@@ -32,8 +32,26 @@ bro_encoded_password="$({
 
 bro_database_url="postgresql://postgres.${BRO_PROJECT_REF}:${bro_encoded_password}@${BRO_POOLER_HOST}:5432/postgres?sslmode=verify-full"
 
-echo "Applying Bro database migrations..."
-DATABASE_DIRECT_URL="${bro_database_url}" pnpm --filter @bro/db db:migrate
+echo "Verifying the Supabase Session pooler connection..."
+DATABASE_URL="${bro_database_url}" pnpm --filter @bro/db exec node --input-type=module -e '
+  import postgres from "postgres";
+  const client = postgres(process.env.DATABASE_URL, {
+    max: 1,
+    prepare: false,
+    connect_timeout: 10,
+  });
+  try {
+    await client`select 1`;
+    console.log("Supabase database connection verified.");
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? error.code : "unknown";
+    const message = error instanceof Error ? error.message : "Unknown database error";
+    console.error(`Supabase database connection failed (${code}): ${message}`);
+    process.exitCode = 1;
+  } finally {
+    await client.end({ timeout: 1 });
+  }
+'
 
 for bro_service in web worker; do
   printf '%s' "${bro_database_url}" |
@@ -42,4 +60,4 @@ for bro_service in web worker; do
     railway variable set DATABASE_DIRECT_URL --stdin --service "${bro_service}" --skip-deploys --json
 done
 
-echo "Database migrations and Railway database variables are configured."
+echo "Railway database variables are configured."
