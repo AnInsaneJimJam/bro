@@ -10,10 +10,10 @@ export function oauthAuthorizationUrl(
     return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: scopes, access_type: 'offline', prompt: 'consent', state: input.state, code_challenge: input.challenge, code_challenge_method: 'S256' })}`;
   }
   if (provider === 'instagram') {
-    const clientId = requireEnv('META_APP_ID'),
-      redirectUri = requireAbsoluteUrl('META_REDIRECT_URI'),
-      scopes = requireEnv('META_SCOPES');
-    return `https://www.facebook.com/${process.env.META_API_VERSION || 'v24.0'}/dialog/oauth?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: scopes, state: input.state, code_challenge: input.challenge, code_challenge_method: 'S256' })}`;
+    const clientId = requireEnv('INSTAGRAM_APP_ID'),
+      redirectUri = requireAbsoluteUrl('INSTAGRAM_REDIRECT_URI'),
+      scopes = requireEnv('INSTAGRAM_SCOPES');
+    return `https://www.instagram.com/oauth/authorize?${new URLSearchParams({ enable_fb_login: '0', force_authentication: '1', client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: scopes, state: input.state })}`;
   }
   if (process.env.REDDIT_INTEGRATION_ENABLED !== 'true')
     throw Object.assign(

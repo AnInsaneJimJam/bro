@@ -19,7 +19,7 @@ export async function revokeProviderToken(
     });
   else if (provider === 'instagram')
     response = await http(
-      `https://graph.facebook.com/${input.apiVersion || 'v24.0'}/me/permissions?access_token=${encodeURIComponent(token)}`,
+      `https://graph.instagram.com/${input.apiVersion || 'v24.0'}/me/permissions?access_token=${encodeURIComponent(token)}`,
       { method: 'DELETE' }
     );
   else {

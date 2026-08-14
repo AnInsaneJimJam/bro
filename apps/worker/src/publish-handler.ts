@@ -84,7 +84,7 @@ export function createPublishHandler(): JobHandlers['publish-video'] {
       const youtube = new YouTubeAdapter(() => token('youtube')),
         instagram = new InstagramAdapter(
           () => token('instagram'),
-          process.env.META_API_VERSION || 'v24.0'
+          process.env.INSTAGRAM_API_VERSION || 'v24.0'
         );
       const projectMeta = project.video_projects.metadata as {
         size?: number;

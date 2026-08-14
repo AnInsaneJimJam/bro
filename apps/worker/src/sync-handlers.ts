@@ -53,7 +53,7 @@ export function createSyncHandlers(): Pick<
     if (row.provider === 'instagram')
       return new InstagramAdapter(
         token,
-        process.env.META_API_VERSION || 'v24.0'
+        process.env.INSTAGRAM_API_VERSION || 'v24.0'
       );
     return new RedditAdapter(
       token,

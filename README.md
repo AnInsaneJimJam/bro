@@ -66,7 +66,7 @@ Set `NEXT_PUBLIC_DEMO_MODE=false` and provide these values in `.env`. Never comm
 - **Supabase:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY`, plus `DATABASE_URL` and `DATABASE_DIRECT_URL` for its Postgres database.
 - **Bro security:** `TOKEN_ENCRYPTION_KEY` and `OAUTH_STATE_SECRET`, which you generate yourself; these are not third-party API keys.
 - **YouTube:** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from a Google Cloud Web OAuth client. No separate YouTube API key is needed for Bro's owned-channel, comment, and upload flows.
-- **Instagram:** `META_APP_ID` and `META_APP_SECRET` from a Meta app. Live publishing and owned-media comments also require an eligible Instagram professional account and the relevant Meta permissions/review.
+- **Instagram:** `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` from Meta's direct Instagram Login setup. Live publishing and owned-media comments require a free Creator or Business professional account and the relevant Meta permissions/review; the official API does not support personal accounts for these features.
 - **Reddit (optional):** `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`; keep `REDDIT_INTEGRATION_ENABLED=false` until Reddit approves the intended use.
 - **Error reporting (optional):** `SENTRY_DSN`.
 
@@ -108,9 +108,9 @@ The adapter uses server-side OAuth, encrypted refresh tokens, quota/error mappin
 
 ### Instagram
 
-1. Create a Meta app, pin and configure `META_API_VERSION`, and register `META_REDIRECT_URI`.
-2. Connect an eligible Instagram professional account linked as required by the current official flow.
-3. Request the configured owned-media, content-publishing, and comment permissions; submit the app and screencast for App Review.
+1. Create a Meta app with **Instagram API with Instagram Login**, pin `INSTAGRAM_API_VERSION`, and register `INSTAGRAM_REDIRECT_URI`.
+2. Connect an eligible Instagram Creator or Business professional account. This direct flow does not require a linked Facebook Page.
+3. Request `instagram_business_basic`, `instagram_business_content_publish`, and `instagram_business_manage_comments`; submit the app and screencast for App Review.
 4. Configure Meta's data deletion URL and privacy-policy URL before public launch.
 
 Bro detects unsupported accounts, creates Reels containers close to execution, polls provider processing, and publishes via the official Graph API. Automated adapter-contract tests pass; live publishing still requires credentials, account eligibility, and review.

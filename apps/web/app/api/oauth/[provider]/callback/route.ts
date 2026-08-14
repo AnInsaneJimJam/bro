@@ -63,7 +63,7 @@ export async function GET(
         : typed === 'instagram'
           ? await new InstagramAdapter(
               async () => tokens.accessToken,
-              process.env.META_API_VERSION || 'v24.0'
+              process.env.INSTAGRAM_API_VERSION || 'v24.0'
             ).connect()
           : await new RedditAdapter(
               async () => tokens.accessToken,
@@ -118,11 +118,11 @@ function providerConfig(provider: OAuthProvider) {
     };
   if (provider === 'instagram')
     return {
-      redirectUri: required('META_REDIRECT_URI'),
-      clientId: required('META_APP_ID'),
-      clientSecret: required('META_APP_SECRET'),
-      scopes: required('META_SCOPES').split(','),
-      apiVersion: process.env.META_API_VERSION,
+      redirectUri: required('INSTAGRAM_REDIRECT_URI'),
+      clientId: required('INSTAGRAM_APP_ID'),
+      clientSecret: required('INSTAGRAM_APP_SECRET'),
+      scopes: required('INSTAGRAM_SCOPES').split(','),
+      apiVersion: process.env.INSTAGRAM_API_VERSION,
     };
   return {
     redirectUri: required('REDDIT_REDIRECT_URI'),

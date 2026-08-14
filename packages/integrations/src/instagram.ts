@@ -18,32 +18,32 @@ export class InstagramAdapter
       new Promise((resolve) => setTimeout(resolve, ms))
   ) {}
   private async url(path: string, params: Record<string, string> = {}) {
-    return `https://graph.facebook.com/${this.version}/${path}?${new URLSearchParams({ ...params, access_token: await this.token() })}`;
+    return `https://graph.instagram.com/${this.version}/${path}?${new URLSearchParams({ ...params, access_token: await this.token() })}`;
   }
   async connect() {
-    const accounts = await providerJson<{
-      data: Array<{
-        instagram_business_account?: { id: string };
-        name?: string;
-      }>;
+    const account = await providerJson<{
+      id?: string;
+      user_id?: string;
+      username?: string;
+      account_type?: string;
     }>(
       'instagram',
       this.http,
-      await this.url('me/accounts', {
-        fields: 'name,instagram_business_account',
+      await this.url('me', {
+        fields: 'id,user_id,username,account_type',
       })
     );
-    const eligible = accounts.data.find((x) => x.instagram_business_account);
-    if (!eligible?.instagram_business_account)
+    const accountId = account.user_id || account.id;
+    if (!accountId)
       throw Object.assign(
         new Error(
-          'Instagram publishing requires an eligible professional account linked to a Facebook Page.'
+          'Instagram publishing requires an eligible professional Business or Creator account.'
         ),
         { code: 'INSTAGRAM_ACCOUNT_INELIGIBLE' }
       );
     return {
-      accountId: eligible.instagram_business_account.id,
-      accountName: eligible.name || 'Instagram professional account',
+      accountId,
+      accountName: account.username || 'Instagram professional account',
     };
   }
   async refreshConnection() {

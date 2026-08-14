@@ -3,6 +3,7 @@ import {
   InstagramAdapter,
   RedditAdapter,
   YouTubeAdapter,
+  exchangeAuthorizationCode,
   type HttpClient,
 } from './index';
 const json = (value: unknown, status = 200) =>
@@ -13,6 +14,36 @@ const json = (value: unknown, status = 200) =>
     })
   );
 describe('official adapters', () => {
+  it('exchanges direct Instagram login codes for long-lived tokens', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const http: HttpClient = (url, init) => {
+      calls.push({ url, init });
+      return url.includes('api.instagram.com/oauth/access_token')
+        ? json({ access_token: 'short-token', user_id: 'ig-1' })
+        : json({ access_token: 'long-token', expires_in: 5_184_000 });
+    };
+    const tokens = await exchangeAuthorizationCode(
+      'instagram',
+      {
+        code: 'authorization-code',
+        verifier: 'unused',
+        redirectUri: 'https://bro.example/api/oauth/instagram/callback',
+        clientId: 'instagram-app',
+        clientSecret: 'instagram-secret',
+        scopes: ['instagram_business_basic'],
+      },
+      http
+    );
+    expect(tokens.accessToken).toBe('long-token');
+    expect(calls[0]?.url).toBe('https://api.instagram.com/oauth/access_token');
+    expect(calls[0]?.init?.body?.toString()).toContain(
+      'code=authorization-code'
+    );
+    expect(calls[1]?.url).toContain(
+      'https://graph.instagram.com/access_token?'
+    );
+  });
+
   it('normalizes YouTube owned content', async () => {
     const calls: string[] = [];
     const http: HttpClient = (url) => {
@@ -61,7 +92,7 @@ describe('official adapters', () => {
     const adapter = new InstagramAdapter(
       async () => 'token',
       'v24.0',
-      () => json({ data: [{ name: 'Page' }] })
+      () => json({})
     );
     await expect(adapter.connect()).rejects.toMatchObject({
       code: 'INSTAGRAM_ACCOUNT_INELIGIBLE',

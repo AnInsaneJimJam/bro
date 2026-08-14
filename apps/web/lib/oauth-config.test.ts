@@ -17,15 +17,35 @@ describe('OAuth provider configuration', () => {
   });
 
   it('rejects insecure non-local redirect URIs', () => {
-    process.env.META_APP_ID = 'app';
-    process.env.META_SCOPES = 'instagram_basic';
-    process.env.META_REDIRECT_URI = 'http://example.com/callback';
+    process.env.INSTAGRAM_APP_ID = 'app';
+    process.env.INSTAGRAM_SCOPES = 'instagram_business_basic';
+    process.env.INSTAGRAM_REDIRECT_URI = 'http://example.com/callback';
     expect(() =>
       oauthAuthorizationUrl('instagram', {
         state: 'state',
         challenge: 'pkce',
       })
     ).toThrow(/absolute HTTPS URL/);
+  });
+
+  it('uses direct Instagram professional login credentials', () => {
+    process.env.INSTAGRAM_APP_ID = 'instagram-app';
+    process.env.INSTAGRAM_SCOPES =
+      'instagram_business_basic,instagram_business_content_publish';
+    process.env.INSTAGRAM_REDIRECT_URI =
+      'https://bro.example/api/oauth/instagram/callback';
+    const url = new URL(
+      oauthAuthorizationUrl('instagram', {
+        state: 'signed-state',
+        challenge: 'unused-for-instagram',
+      })
+    );
+    expect(url.origin).toBe('https://www.instagram.com');
+    expect(url.searchParams.get('client_id')).toBe('instagram-app');
+    expect(url.searchParams.get('enable_fb_login')).toBe('0');
+    expect(url.searchParams.get('scope')).toContain(
+      'instagram_business_content_publish'
+    );
   });
 
   it('builds an encoded YouTube request from complete configuration', () => {

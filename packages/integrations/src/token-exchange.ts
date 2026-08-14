@@ -46,13 +46,28 @@ export async function exchangeAuthorizationCode(
     };
   }
   if (provider === 'instagram') {
+    const shortLived = await providerJson<{
+      access_token: string;
+      user_id?: string;
+      expires_in?: number;
+    }>('instagram', http, 'https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: input.clientId,
+        client_secret: input.clientSecret,
+        grant_type: 'authorization_code',
+        redirect_uri: input.redirectUri,
+        code: input.code,
+      }),
+    });
     const data = await providerJson<{
       access_token: string;
       expires_in?: number;
     }>(
       'instagram',
       http,
-      `https://graph.facebook.com/${input.apiVersion || 'v24.0'}/oauth/access_token?${new URLSearchParams({ client_id: input.clientId, client_secret: input.clientSecret, redirect_uri: input.redirectUri, code: input.code, code_verifier: input.verifier })}`
+      `https://graph.instagram.com/access_token?${new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: input.clientSecret, access_token: shortLived.access_token })}`
     );
     return {
       accessToken: data.access_token,

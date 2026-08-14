@@ -63,7 +63,7 @@ export async function DELETE() {
               connection.provider === 'reddit'
                 ? process.env.REDDIT_CLIENT_SECRET
                 : undefined,
-            apiVersion: process.env.META_API_VERSION,
+            apiVersion: process.env.INSTAGRAM_API_VERSION,
             userAgent: process.env.REDDIT_USER_AGENT,
           }
         );
