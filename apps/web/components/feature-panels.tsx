@@ -358,6 +358,7 @@ function Videos() {
     video = useRef<HTMLVideoElement>(null),
     [cues, setCues] = useState<Cue[]>([]),
     [projectId, setProjectId] = useState(''),
+    [projectState, setProjectState] = useState(''),
     [updatedAt, setUpdatedAt] = useState(''),
     [status, setStatus] = useState('Loading your latest video project…'),
     [preview, setPreview] = useState(''),
@@ -385,6 +386,18 @@ function Videos() {
   useEffect(() => {
     void loadLatestProject();
   }, []);
+  useEffect(() => {
+    if (
+      !projectId ||
+      projectId === 'demo' ||
+      !['queued', 'uploaded', 'validating'].includes(projectState)
+    )
+      return;
+    const timer = window.setInterval(() => {
+      void refresh(projectId);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [projectId, projectState]);
   async function loadLatestProject() {
     const response = await fetch('/api/videos?limit=1'),
       projects = await response.json();
@@ -450,6 +463,7 @@ function Videos() {
       return;
     }
     setProjectId(created.projectId);
+    setProjectState(created.state || 'queued');
     const media = await fetch(`/api/videos/${created.projectId}/media`),
       signedMedia = await media.json();
     if (media.ok) setPreview(signedMedia.url);
@@ -467,13 +481,14 @@ function Videos() {
       return;
     }
     setCues(
-      d.cues.map((c: Cue) => ({
+      (Array.isArray(d.cues) ? d.cues : []).map((c: Cue) => ({
         text: c.text,
         start: c.start,
         end: c.end,
         style: c.style,
       }))
     );
+    setProjectState(d.project.state || '');
     if (d.cues[0]?.style)
       setStyle((current) => ({ ...current, ...d.cues[0].style }));
     setUpdatedAt(d.project.updatedAt);
@@ -543,6 +558,14 @@ function Videos() {
       setStatus('Upload and validate a video first.');
       return;
     }
+    if (projectState !== 'ready') {
+      setStatus(
+        projectState
+          ? `The video is still ${projectState}. Bro will enable publishing when validation finishes.`
+          : 'Upload and validate a video first.'
+      );
+      return;
+    }
     const providers = [
       ...(youtubeEnabled ? (['youtube'] as const) : []),
       ...(instagramEnabled ? (['instagram'] as const) : []),
@@ -582,9 +605,7 @@ function Videos() {
       return;
     }
     if (data.requiresConfirmation) {
-      const approved = confirm(
-        `Publish ${data.card.mediaName} to ${data.card.providers.join(' + ')} now?`
-      );
+      const approved = confirm(publishConfirmationText(data.card));
       if (!approved) {
         setStatus('Publish job is awaiting your confirmation.');
         return;
@@ -737,7 +758,11 @@ function Videos() {
               />
             </label>
           )}
-          <button className="primary-small" onClick={publishNow}>
+          <button
+            className="primary-small"
+            onClick={publishNow}
+            disabled={!projectId || projectState !== 'ready'}
+          >
             Publish now
           </button>
           <small>
@@ -755,6 +780,12 @@ function Calendar() {
     scheduledAt: string;
     scheduledLocalDate?: string;
     state: string;
+    destinations?: Array<{
+      provider: string;
+      state: string;
+      url?: string | null;
+      errorMessage?: string | null;
+    }>;
   };
   type Project = {
     id: string;
@@ -854,11 +885,7 @@ function Calendar() {
       }),
       data = await response.json();
     if (data.requiresConfirmation) {
-      if (
-        !confirm(
-          `Confirm ${data.card.mediaName} to ${data.card.providers.join(' + ')} at ${data.card.scheduledAt} ${data.card.timeZone}?`
-        )
-      ) {
+      if (!confirm(publishConfirmationText(data.card))) {
         setMessage('Schedule remains awaiting confirmation.');
         return;
       }
@@ -968,13 +995,24 @@ function Calendar() {
                     if (job.state === 'scheduled') cancel(job.id);
                   }}
                 >
-                  <Youtube />
                   {new Date(job.scheduledAt).toLocaleTimeString([], {
                     timeZone: zone,
                     hour: '2-digit',
                     minute: '2-digit',
                   })}{' '}
                   · {job.state}
+                  <small className="calendar-destinations">
+                    {(job.destinations || []).map((destination) => (
+                      <i key={`${job.id}-${destination.provider}`}>
+                        {destination.provider === 'youtube' ? (
+                          <Youtube />
+                        ) : (
+                          <Instagram />
+                        )}
+                        {destination.state}
+                      </i>
+                    ))}
+                  </small>
                 </b>
               ))}
             </button>
@@ -1087,6 +1125,29 @@ function Calendar() {
 function localInput(date: Date) {
   const offset = date.getTimezoneOffset();
   return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+}
+function publishConfirmationText(card: {
+  mediaName: string;
+  providers: string[];
+  title?: string;
+  caption?: string;
+  scheduledAt?: string;
+  timeZone: string;
+  visibility?: string;
+}) {
+  return [
+    'Review this externally visible publish:',
+    `Media: ${card.mediaName}`,
+    `Destinations: ${card.providers.join(' + ')}`,
+    card.title ? `YouTube title: ${card.title}` : undefined,
+    card.caption ? `Description/caption: ${card.caption}` : undefined,
+    card.visibility ? `YouTube visibility: ${card.visibility}` : undefined,
+    `When: ${card.scheduledAt || 'Publish now'} (${card.timeZone})`,
+    '',
+    'Create this publish job?',
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
 }
 function Comments() {
   type Analysis = {

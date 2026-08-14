@@ -28,9 +28,7 @@ const metadataSchema = z.object({
       visibility: z.enum(['public', 'unlisted', 'private']).default('public'),
     })
     .optional(),
-  instagram: z
-    .object({ caption: z.string().max(2200).default('') })
-    .optional(),
+  instagram: z.object({ caption: z.string().max(2200).default('') }).optional(),
 });
 const input = z.object({
   projectId: z.string().uuid(),
@@ -66,7 +64,29 @@ export async function GET(request: Request) {
       .where(and(...conditions))
       .orderBy(desc(publishJobs.scheduledAt))
       .limit(100);
-    return NextResponse.json(jobs);
+    if (!jobs.length) return NextResponse.json([]);
+    const destinations = await database.db
+      .select()
+      .from(publishDestinations)
+      .where(
+        inArray(
+          publishDestinations.jobId,
+          jobs.map((job) => job.id)
+        )
+      );
+    const byJob = new Map<string, typeof destinations>();
+    for (const destination of destinations) {
+      if (!destination.jobId) continue;
+      const current = byJob.get(destination.jobId) || [];
+      current.push(destination);
+      byJob.set(destination.jobId, current);
+    }
+    return NextResponse.json(
+      jobs.map((job) => ({
+        ...job,
+        destinations: byJob.get(job.id) || [],
+      }))
+    );
   } catch (error) {
     return jsonError(error);
   } finally {

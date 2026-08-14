@@ -8,13 +8,7 @@ import {
   Instagram,
   Youtube,
 } from 'lucide-react';
-const countries = [
-  { code: 'IN', name: 'India', zone: 'Asia/Kolkata' },
-  { code: 'US', name: 'United States', zone: 'America/New_York' },
-  { code: 'GB', name: 'United Kingdom', zone: 'Europe/London' },
-  { code: 'CA', name: 'Canada', zone: 'America/Toronto' },
-  { code: 'AU', name: 'Australia', zone: 'Australia/Sydney' },
-];
+import { countries } from '@/lib/countries';
 export function Onboarding({
   initialStep = 1,
   demoMode = false,
@@ -26,7 +20,10 @@ export function Onboarding({
 }) {
   const [step, setStep] = useState(initialStep);
   const [name, setName] = useState('Creator');
-  const [country, setCountry] = useState(countries[0]!);
+  const [country, setCountry] = useState(
+    countries.find((item) => item.code === 'IN') || countries[0]!
+  );
+  const [countryQuery, setCountryQuery] = useState('');
   const [niche, setNiche] = useState('');
   const [proposalId, setProposalId] = useState('');
   const [subNiches, setSubNiches] = useState<string[]>([]);
@@ -48,6 +45,16 @@ export function Onboarding({
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
+  const filteredCountries = countries.filter((item) =>
+    `${item.name} ${item.code}`
+      .toLowerCase()
+      .includes(countryQuery.trim().toLowerCase())
+  );
+  const countryOptions = filteredCountries.some(
+    (item) => item.code === country.code
+  )
+    ? filteredCountries
+    : [country, ...filteredCountries];
 
   useEffect(() => {
     if (!demoMode) void refreshConnections();
@@ -219,16 +226,27 @@ export function Onboarding({
               <input value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label>
-              Country
+              Search country
+              <input
+                value={countryQuery}
+                onChange={(e) => setCountryQuery(e.target.value)}
+                placeholder="Type a country name or ISO code"
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              Country ({countries.length} ISO options)
               <select
                 value={country.code}
                 onChange={(e) =>
-                  setCountry(countries.find((c) => c.code === e.target.value)!)
+                  setCountry(
+                    countries.find((c) => c.code === e.target.value) || country
+                  )
                 }
               >
-                {countries.map((c) => (
+                {countryOptions.map((c) => (
                   <option value={c.code} key={c.code}>
-                    {c.name}
+                    {c.name} ({c.code})
                   </option>
                 ))}
               </select>

@@ -1829,6 +1829,24 @@ header p {
 .calendar-grid b svg {
   width: 12px;
 }
+.calendar-grid b .calendar-destinations {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 600;
+}
+.calendar-grid b .calendar-destinations i {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-style: normal;
+}
+.calendar-grid b .calendar-destinations svg {
+  width: 10px;
+  height: 10px;
+}
 .slot-editor {
   display: grid;
   grid-template-columns: 35px 220px 1fr auto;

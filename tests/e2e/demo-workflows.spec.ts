@@ -119,9 +119,10 @@ test('demo calendar completes a clearly labeled local schedule', async ({
   if (testInfo.project.name.includes('mobile'))
     await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Calendar', exact: true }).click();
-  await expect(page.locator('.slot-editor select')).toHaveValue(
+  await expect(page.locator('.slot-editor select').first()).toHaveValue(
     '30000000-0000-4000-8000-000000000001'
   );
+  await page.getByLabel('YouTube title').fill('Demo Short');
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Review schedule' }).click();
   await expect(
@@ -132,7 +133,7 @@ test('demo calendar completes a clearly labeled local schedule', async ({
   await expect(page.getByText(/scheduled · demo/)).toBeVisible();
 });
 
-test('caption editor supports split merge delete and overlap validation', async ({
+test('video workspace exposes direct multi-platform metadata publishing', async ({
   page,
 }, testInfo) => {
   await page.goto('/app');
@@ -140,18 +141,17 @@ test('caption editor supports split merge delete and overlap validation', async 
     await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('button', { name: 'Videos', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Videos & captions', exact: true })
+    page.getByRole('heading', { name: 'Upload & publish', exact: true })
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Split' }).first().click();
-  await expect(page.locator('.cue')).toHaveCount(3);
-  await page.getByRole('button', { name: 'Merge' }).first().click();
-  await expect(page.locator('.cue')).toHaveCount(2);
-  await page.locator('.cue').nth(1).getByLabel('Start').fill('1');
-  await expect(page.getByText(/overlaps cue/)).toBeVisible();
-  await page.locator('.cue').nth(1).getByLabel('Start').fill('2.2');
-  await expect(page.getByText(/overlaps cue/)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Delete' }).last().click();
-  await expect(page.locator('.cue')).toHaveCount(1);
+  await expect(page.getByLabel('YouTube title')).toBeVisible();
+  await expect(page.getByLabel('YouTube description')).toBeVisible();
+  await expect(page.getByLabel('Instagram caption')).toBeVisible();
+  await expect(
+    page.getByText('Subtitle editing will be added later')
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Publish now' })
+  ).toBeDisabled();
 });
 
 test('comment analysis shows sample caveat and representative evidence', async ({

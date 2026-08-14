@@ -81,6 +81,7 @@ export function Dashboard() {
       mediaName: string;
       providers: string[];
       title?: string;
+      caption?: string;
       scheduledAt?: string;
       timeZone: string;
       visibility: string;
@@ -507,10 +508,17 @@ export function Dashboard() {
                   <dd>{confirmation.card.title}</dd>
                 </div>
               )}
+              {confirmation.card.caption && (
+                <div>
+                  <dt>Description / caption</dt>
+                  <dd>{confirmation.card.caption}</dd>
+                </div>
+              )}
               <div>
                 <dt>When</dt>
                 <dd>
-                  {confirmation.card.scheduledAt} · {confirmation.card.timeZone}
+                  {confirmation.card.scheduledAt || 'Publish now'} ·{' '}
+                  {confirmation.card.timeZone}
                 </dd>
               </div>
               <div>
