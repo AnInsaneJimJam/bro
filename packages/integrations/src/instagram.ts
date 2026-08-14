@@ -25,12 +25,14 @@ export class InstagramAdapter
       id?: string;
       user_id?: string;
       username?: string;
-      account_type?: string;
     }>(
       'instagram',
       this.http,
       await this.url('me', {
-        fields: 'id,user_id,username,account_type',
+        // Direct Instagram Login only needs the professional account ID and
+        // username here. Keeping the probe minimal avoids rejecting a valid
+        // token when optional profile fields are unavailable to the app.
+        fields: 'user_id,username',
       })
     );
     const accountId = account.user_id || account.id;

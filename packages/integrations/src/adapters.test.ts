@@ -98,6 +98,19 @@ describe('official adapters', () => {
       code: 'INSTAGRAM_ACCOUNT_INELIGIBLE',
     });
   });
+  it('uses the minimal direct-login profile probe for Instagram', async () => {
+    const calls: string[] = [];
+    const account = await new InstagramAdapter(
+      async () => 'token',
+      'v24.0',
+      async (url) => {
+        calls.push(url);
+        return json({ user_id: 'ig-1', username: 'creator' });
+      }
+    ).connect();
+    expect(account).toEqual({ accountId: 'ig-1', accountName: 'creator' });
+    expect(calls[0]).toContain('fields=user_id%2Cusername');
+  });
   it('fails closed when Reddit is disabled', async () => {
     const adapter = new RedditAdapter(
       async () => 'token',
