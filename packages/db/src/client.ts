@@ -30,10 +30,28 @@ export function createDatabase(url = process.env.DATABASE_URL) {
       status: 503,
     });
   const ssl = getDatabaseSslOptions();
-  const client = postgres(url, {
-    max: 10,
-    prepare: false,
-    ...(ssl ? { ssl } : {}),
-  });
+  // The web process creates short-lived database handles for each route. A
+  // large per-request pool can exhaust Supabase's session pooler when the
+  // dashboard runs several reads at once, so keep this deliberately small.
+  const configuredMax = Number(process.env.DATABASE_POOL_MAX || 4);
+  const max = Number.isFinite(configuredMax)
+    ? Math.max(1, Math.min(10, Math.floor(configuredMax)))
+    : 4;
+  const configuredConnectTimeout = Number(
+    process.env.DATABASE_CONNECT_TIMEOUT_SECONDS || 10
+  );
+  const connectTimeout = Number.isFinite(configuredConnectTimeout)
+    ? Math.max(3, Math.min(60, Math.floor(configuredConnectTimeout)))
+    : 10;
+  const client = postgres(
+    databaseUrlWithExternalSslOptions(url, Boolean(ssl)),
+    {
+      max,
+      prepare: false,
+      connect_timeout: connectTimeout,
+      idle_timeout: 20,
+      ...(ssl ? { ssl } : {}),
+    }
+  );
   return { db: drizzle(client, { schema }), close: () => client.end() };
 }

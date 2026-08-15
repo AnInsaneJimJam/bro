@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { generateStructuredText, nicheOutput } from '@bro/ai';
-import { creatorContentItems, createDatabase, nicheVersions } from '@bro/db';
+import {
+  creatorContentItems,
+  createDatabase,
+  nicheVersions,
+  users,
+} from '@bro/db';
 import { requireUser } from '@/lib/auth';
 import { demoStore } from '@/lib/demo-store';
 import { jsonError } from '@/lib/http';
@@ -25,6 +30,10 @@ export async function GET() {
     if (user.demo) return NextResponse.json(demoStore.listNiches());
     const database = createDatabase();
     close = database.close;
+    await database.db
+      .insert(users)
+      .values({ id: user.id })
+      .onConflictDoNothing({ target: users.id });
     return NextResponse.json(
       await database.db
         .select()
@@ -52,6 +61,10 @@ export async function POST(request: Request) {
       );
     const database = createDatabase();
     close = database.close;
+    await database.db
+      .insert(users)
+      .values({ id: user.id })
+      .onConflictDoNothing({ target: users.id });
     if (body.action === 'confirm') {
       const confirmed = await database.db.transaction(async (tx) => {
         const [owned] = await tx

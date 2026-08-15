@@ -91,6 +91,13 @@ export async function GET() {
       });
     const database = createDatabase();
     close = database.close;
+    // OAuth creates the Supabase auth identity before the Bro profile is
+    // necessarily saved. Keep a nullable shell row so every user-scoped
+    // foreign key and home read has a valid owner on first login.
+    await database.db
+      .insert(users)
+      .values({ id: user.id })
+      .onConflictDoNothing({ target: users.id });
     const now = new Date();
     const [
       [profile],

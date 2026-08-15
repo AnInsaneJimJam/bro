@@ -18,6 +18,10 @@ export async function GET() {
     if (user.demo) return NextResponse.json(demoStore.getProfile());
     const database = createDatabase();
     close = database.close;
+    await database.db
+      .insert(users)
+      .values({ id: user.id })
+      .onConflictDoNothing({ target: users.id });
     const [profile] = await database.db
       .select()
       .from(users)
