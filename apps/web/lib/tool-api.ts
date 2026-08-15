@@ -153,12 +153,14 @@ export async function executeToolThroughOwnedRoutes(
   // local Next.js listener instead; the Supabase session cookie is forwarded
   // so the nested route still performs its normal ownership checks.
   const requestUrl = new URL(request.url),
-    internalOrigin =
-      requestUrl.hostname === 'localhost' ||
-      requestUrl.hostname === '127.0.0.1' ||
-      requestUrl.hostname === '::1'
-        ? requestUrl.origin
-        : `http://127.0.0.1:${process.env.PORT || '3000'}`;
+    // Next may expose the forwarded public scheme (`https`) even when the
+    // request URL's host is local. Railway's process listener is plain HTTP,
+    // so never reuse that scheme for the in-process hop.
+    internalPort =
+      requestUrl.port && requestUrl.port !== '443' && requestUrl.port !== '80'
+        ? requestUrl.port
+        : process.env.PORT || '3000',
+    internalOrigin = `http://127.0.0.1:${internalPort}`;
   const response = await fetch(new URL(path, internalOrigin), {
     method: route.method || 'GET',
     headers,
