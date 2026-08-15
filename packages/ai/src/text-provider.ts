@@ -52,7 +52,6 @@ export async function generateStructuredText<T>(
         generationConfig: {
           responseMimeType: 'application/json',
           responseSchema: zodToJsonSchema(input.schema, {
-            name: input.schemaName,
             target: 'openApi3',
             $refStrategy: 'none',
           }),
