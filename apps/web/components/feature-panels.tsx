@@ -39,7 +39,20 @@ type ConnectionSummary = {
   status?: string;
   needsReauthorization?: boolean;
 };
-export function FeaturePanel({ active }: { active: string }) {
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+};
+export function FeaturePanel({
+  active,
+  chatMessages,
+  chatBusy,
+}: {
+  active: string;
+  chatMessages?: ChatMessage[];
+  chatBusy?: boolean;
+}) {
   if (active === 'Ideas') return <Ideas />;
   if (active === 'Scripts') return <Scripts />;
   if (active === 'Videos') return <Videos />;
@@ -47,7 +60,8 @@ export function FeaturePanel({ active }: { active: string }) {
   if (active === 'Comments') return <Comments />;
   if (active === 'Connections') return <Connections />;
   if (active === 'Settings') return <Settings />;
-  if (active === 'Bro Chat') return <BroChatIntro />;
+  if (active === 'Bro Chat')
+    return <BroChat messages={chatMessages || []} busy={Boolean(chatBusy)} />;
   return null;
 }
 function Ideas() {
@@ -1609,26 +1623,60 @@ function Toggle({
     </div>
   );
 }
-function BroChatIntro() {
+function BroChat({
+  messages,
+  busy,
+}: {
+  messages: ChatMessage[];
+  busy: boolean;
+}) {
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [messages.length, busy]);
   return (
     <Surface
       title="Bro Chat"
       subtitle="Typed and recorded English commands invoke validated application tools."
     >
-      <div className="chat-intro">
-        <h3>What should we make next?</h3>
-        <p>
-          Try “Find five trending AI-memory topics in India” or “Write a
-          45-second script for topic two with a contrarian hook.”
-        </p>
-        <div>
-          <Check />
-          Missing information is requested instead of guessed.
-        </div>
-        <div>
-          <Check />
-          Publishing obeys destination-specific confirmation settings.
-        </div>
+      <div className="chat-panel" role="log" aria-live="polite">
+        {!messages.length && !busy ? (
+          <div className="chat-empty">
+            <h3>What should we make next?</h3>
+            <p>
+              Ask Bro to find evidence-backed topics, write a short script, or
+              check your connected accounts. Use the composer below to start.
+            </p>
+            <div className="chat-rules">
+              <span>
+                <Check /> Missing information is requested instead of guessed.
+              </span>
+              <span>
+                <Check /> Publishing obeys destination-specific confirmation
+                settings.
+              </span>
+            </div>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <article
+              className={`chat-message ${message.role}`}
+              key={message.id}
+            >
+              <span className="chat-author">
+                {message.role === 'user' ? 'You' : 'Bro'}
+              </span>
+              <p>{message.content}</p>
+            </article>
+          ))
+        )}
+        {busy && (
+          <article className="chat-message assistant pending">
+            <span className="chat-author">Bro</span>
+            <p>Working on that…</p>
+          </article>
+        )}
+        <div ref={endRef} />
       </div>
     </Surface>
   );

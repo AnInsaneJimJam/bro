@@ -66,6 +66,11 @@ type HomeData = {
     updatedAt: string;
   }>;
 };
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 export function Dashboard() {
   const [active, setActive] = useState('Home');
@@ -76,6 +81,8 @@ export function Dashboard() {
   const [recording, setRecording] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [home, setHome] = useState<HomeData | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatThreadId, setChatThreadId] = useState<string>();
   const autoDiscoveryAttempted = useRef(false);
   const [confirmation, setConfirmation] = useState<{
     jobId: string;
@@ -192,22 +199,40 @@ export function Dashboard() {
   async function submit() {
     if (!command.trim() || busy) return;
     const sent = command.trim();
+    setChatMessages((current) => [
+      ...current,
+      { id: `user-${Date.now()}`, role: 'user', content: sent },
+    ]);
     setBusy(true);
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: sent }),
+        body: JSON.stringify({
+          message: sent,
+          ...(chatThreadId ? { threadId: chatThreadId } : {}),
+        }),
       });
       const data = await response.json();
-      setNotice(data.message || data.error || 'Command completed');
+      const reply = data.message || data.error || 'Command completed';
+      setChatMessages((current) => [
+        ...current,
+        { id: `assistant-${Date.now()}`, role: 'assistant', content: reply },
+      ]);
+      if (data.threadId) setChatThreadId(data.threadId);
+      setNotice(active === 'Bro Chat' ? '' : reply);
       if (data.confirmations?.[0]) setConfirmation(data.confirmations[0]);
       if (response.ok) setCommand('');
     } catch {
-      setNotice('Bro could not reach the command service.');
+      const reply = 'Bro could not reach the command service.';
+      setChatMessages((current) => [
+        ...current,
+        { id: `assistant-${Date.now()}`, role: 'assistant', content: reply },
+      ]);
+      setNotice(active === 'Bro Chat' ? '' : reply);
     } finally {
       setBusy(false);
-      setTimeout(() => setNotice(''), 6000);
+      if (active !== 'Bro Chat') setTimeout(() => setNotice(''), 6000);
     }
   }
   async function confirmPublish() {
@@ -355,7 +380,11 @@ export function Dashboard() {
           </div>
         </header>
         {active !== 'Home' ? (
-          <FeaturePanel active={active} />
+          <FeaturePanel
+            active={active}
+            chatMessages={chatMessages}
+            chatBusy={busy}
+          />
         ) : (
           <div className="dashboard">
             <section className="main-column">
