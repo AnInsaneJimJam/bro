@@ -83,6 +83,7 @@ export function Dashboard() {
   const [home, setHome] = useState<HomeData | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatThreadId, setChatThreadId] = useState<string>();
+  const [scriptToOpen, setScriptToOpen] = useState<string>();
   const autoDiscoveryAttempted = useRef(false);
   const [confirmation, setConfirmation] = useState<{
     jobId: string;
@@ -220,7 +221,18 @@ export function Dashboard() {
         { id: `assistant-${Date.now()}`, role: 'assistant', content: reply },
       ]);
       if (data.threadId) setChatThreadId(data.threadId);
-      setNotice(active === 'Bro Chat' ? '' : reply);
+      const openedScript =
+        response.ok &&
+        data.action?.type === 'open_scripts' &&
+        typeof data.action.scriptId === 'string'
+          ? data.action.scriptId
+          : undefined;
+      if (openedScript) {
+        setScriptToOpen(openedScript);
+        setActive('Scripts');
+        location.hash = encodeURIComponent('Scripts');
+        setNotice('Script generated and selected in Scripts.');
+      } else setNotice(active === 'Bro Chat' ? '' : reply);
       if (data.confirmations?.[0]) setConfirmation(data.confirmations[0]);
       if (response.ok) setCommand('');
     } catch {
@@ -384,6 +396,7 @@ export function Dashboard() {
             active={active}
             chatMessages={chatMessages}
             chatBusy={busy}
+            focusScriptId={scriptToOpen}
           />
         ) : (
           <div className="dashboard">

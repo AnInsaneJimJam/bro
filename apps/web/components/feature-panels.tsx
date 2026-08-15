@@ -48,13 +48,15 @@ export function FeaturePanel({
   active,
   chatMessages,
   chatBusy,
+  focusScriptId,
 }: {
   active: string;
   chatMessages?: ChatMessage[];
   chatBusy?: boolean;
+  focusScriptId?: string;
 }) {
   if (active === 'Ideas') return <Ideas />;
-  if (active === 'Scripts') return <Scripts />;
+  if (active === 'Scripts') return <Scripts focusScriptId={focusScriptId} />;
   if (active === 'Videos') return <Videos />;
   if (active === 'Calendar') return <Calendar />;
   if (active === 'Comments') return <Comments />;
@@ -145,18 +147,41 @@ function Ideas() {
     </Surface>
   );
 }
-function Scripts() {
+function Scripts({ focusScriptId }: { focusScriptId?: string }) {
   const [items, setItems] = useState<Script[]>([]),
     [selected, setSelected] = useState<Script | null>(null),
     [message, setMessage] = useState('');
-  async function load() {
+  async function load(preferredId?: string) {
     const r = await fetch('/api/scripts'),
       d = await r.json();
-    setItems(Array.isArray(d) ? d : []);
+    if (!r.ok) {
+      setMessage(d.error || 'Could not load scripts.');
+      return;
+    }
+    const next = Array.isArray(d) ? (d as Script[]) : [];
+    setItems(next);
+    // The API returns newest first. Open the requested generated script when
+    // supplied; otherwise make the first script the active editor by default.
+    setSelected((current) => {
+      const target = preferredId
+        ? next.find((script) => script.id === preferredId)
+        : current
+          ? next.find((script) => script.id === current.id)
+          : next[0];
+      return target
+        ? {
+            ...target,
+            version:
+              target.version ||
+              (target as Script & { currentVersion?: number }).currentVersion ||
+              1,
+          }
+        : null;
+    });
   }
   useEffect(() => {
-    load();
-  }, []);
+    void load(focusScriptId);
+  }, [focusScriptId]);
   async function create() {
     const opportunityResponse = await fetch('/api/opportunities?count=5'),
       opportunities = await opportunityResponse.json(),

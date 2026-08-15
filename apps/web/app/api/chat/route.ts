@@ -135,7 +135,8 @@ export async function POST(req: Request) {
             (value as { requiresConfirmation?: boolean })
               .requiresConfirmation === true
         );
-      const assistantMessage = chatActionSummary(result) || result.text || '';
+      const action = chatActionSummary(result),
+        assistantMessage = action?.message || result.text || '';
       await database.db.insert(chatMessages).values({
         threadId: ownedThreadId,
         role: 'assistant',
@@ -152,6 +153,7 @@ export async function POST(req: Request) {
         mode: 'live',
         confirmations,
         threadId: ownedThreadId,
+        ...(action?.action ? { action: action.action } : {}),
       });
     }
     const resolution = resolveDemoCommand(message);
@@ -374,7 +376,12 @@ function confirmedNicheReply(
 }
 function chatActionSummary(result: {
   toolResults: Array<{ name: string; result: unknown }>;
-}) {
+}):
+  | {
+      message: string;
+      action?: { type: 'open_scripts'; scriptId: string };
+    }
+  | undefined {
   for (const item of result.toolResults) {
     const value = item.result;
     if (!value || typeof value !== 'object') continue;
@@ -385,7 +392,10 @@ function chatActionSummary(result: {
     ) {
       const title =
         typeof record.title === 'string' ? ` “${record.title}”` : '';
-      return `Script generated${title}. Open Scripts to review and edit it.`;
+      return {
+        message: `Script generated${title}. Opening Scripts so you can review and edit it.`,
+        action: { type: 'open_scripts', scriptId: record.id },
+      };
     }
     if (
       item.name === 'infer_creator_niche' &&
@@ -396,20 +406,29 @@ function chatActionSummary(result: {
             (value): value is string => typeof value === 'string'
           )
         : [];
-      return `I found a proposed niche: ${record.label}${subNiches.length ? ` (${subNiches.join(', ')})` : ''}. Open Ideas or the niche review step to confirm or edit it before discovering topics.`;
+      return {
+        message: `I found a proposed niche: ${record.label}${subNiches.length ? ` (${subNiches.join(', ')})` : ''}. Open Ideas or the niche review step to confirm or edit it before discovering topics.`,
+      };
     }
     if (
       item.name === 'confirm_creator_niche' &&
       typeof record.label === 'string'
     )
-      return `Niche confirmed as ${record.label}. Bro will use it for topic opportunities.`;
+      return {
+        message: `Niche confirmed as ${record.label}. Bro will use it for topic opportunities.`,
+      };
     if (
       item.name === 'discover_topic_opportunities' &&
       Array.isArray(record.items)
     )
-      return `Topic opportunities are ready. Open Ideas to review them.`;
+      return {
+        message: 'Topic opportunities are ready. Open Ideas to review them.',
+      };
     if (item.name === 'sync_creator_content' && record.queued === true)
-      return 'Content sync queued. I will use the refreshed records for the next Bro action.';
+      return {
+        message:
+          'Content sync queued. I will use the refreshed records for the next Bro action.',
+      };
   }
   return undefined;
 }
