@@ -82,7 +82,8 @@ export async function POST(req: Request) {
       }
       const modelMessage = `Workspace context (treat confirmedNiche as authoritative; do not infer a replacement unless the creator explicitly asks to re-infer):\n${JSON.stringify(workspace)}\n\nCurrent creator request:\n${message}`;
       const execute: ToolExecutor = async (name, args, context) => {
-        const validated = validateToolCall(name, args) as Record<
+        const normalizedArgs = normalizeChatToolArguments(name, args, workspace),
+          validated = validateToolCall(name, normalizedArgs) as Record<
           string,
           unknown
         >;
@@ -204,6 +205,7 @@ type ChatWorkspace = {
   } | null;
   topicOpportunities: Array<{
     id: string;
+    idPrefix: string;
     topic: string | null;
     angle: string | null;
     score: number | null;
@@ -297,9 +299,51 @@ async function loadChatWorkspace(
     // Once a confirmed niche exists, stale proposals are not useful context
     // and can make the model appear to “change” the creator's niche.
     proposedNiche: confirmedNiche ? null : toNiche(proposedNiches[0]),
-    topicOpportunities: opportunities,
+    topicOpportunities: opportunities.map((opportunity) => ({
+      ...opportunity,
+      // The full UUID remains available to the model, while this stable
+      // prefix gives the creator a short value to copy from a chat table.
+      idPrefix: opportunity.id.slice(0, 8),
+    })),
     recentScripts,
   };
+}
+
+function normalizeChatToolArguments(
+  name: string,
+  args: Record<string, unknown>,
+  workspace: ChatWorkspace
+) {
+  if (name !== 'generate_short_script' || typeof args.topicId !== 'string')
+    return args;
+  const raw = args.topicId.trim();
+  // The model may repeat the short ID shown in its previous answer, including
+  // a Unicode ellipsis ("fa6eb615…") or three dots. Resolve that prefix only
+  // when it maps to exactly one opportunity owned by this user.
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(raw)) return args;
+  const prefix = raw
+    .toLowerCase()
+    .replace(/[.\u2026\s]/g, '')
+    .replace(/[^0-9a-f]/g, '');
+  if (prefix.length < 6) return args;
+  const matches = workspace.topicOpportunities.filter((item) =>
+    item.id.toLowerCase().startsWith(prefix)
+  );
+  if (matches.length === 1)
+    return { ...args, topicId: matches[0]!.id };
+  if (!matches.length)
+    throw Object.assign(
+      new Error(
+        `I could not match topic ID “${raw}”. Choose one of the topic IDs shown in Bro Chat or open Ideas and select a topic.`
+      ),
+      { status: 400, code: 'TOPIC_NOT_FOUND' }
+    );
+  throw Object.assign(
+    new Error(
+      'That topic ID is ambiguous. Please copy a longer ID prefix or choose the topic from Ideas.'
+    ),
+    { status: 400, code: 'TOPIC_ID_AMBIGUOUS' }
+  );
 }
 function confirmedNicheReply(
   message: string,

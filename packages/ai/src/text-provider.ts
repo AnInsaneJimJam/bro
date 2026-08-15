@@ -85,11 +85,20 @@ export async function generateStructuredText<T>(
         );
       throw error;
     }
-    const text = response.choices[0]?.message?.content;
-    if (!text)
-      throw Object.assign(new Error('OpenRouter returned no structured text'), {
-        status: 502,
-      });
+    // A free OpenRouter model can occasionally return a successful HTTP
+    // response without the normal Chat Completions `choices` array (for
+    // example, while a provider is being unloaded). Do not dereference that
+    // shape blindly: script generation has a transparent deterministic
+    // fallback for typed provider failures.
+    const text = response?.choices?.[0]?.message?.content;
+    if (typeof text !== 'string' || !text.trim())
+      throw Object.assign(
+        new Error('OpenRouter returned no structured text'),
+        {
+          status: 502,
+          code: 'AI_INVALID_RESPONSE',
+        }
+      );
     try {
       return input.schema.parse(parseJsonText(text));
     } catch (error) {
