@@ -86,7 +86,7 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 
 - Polished landing page with live/demo labeling and a clear YouTube/Instagram connection path.
 - Supabase email/password sign-up/sign-in and magic-link flow.
-- Supabase Google sign-in button with the same safe callback; Google sign-in identifies the Bro user but does not replace the separate YouTube connection OAuth.
+- Supabase Google sign-in button with the same safe callback; Google sign-in identifies the Bro user but does not replace the separate YouTube connection OAuth. The browser obtains the public Supabase URL/key from a no-store same-origin route so Railway runtime configuration works even when Next.js public variables were not present during image build.
 - OAuth callback for Bro authentication with safe `next` path validation.
 - Display name, searchable ISO country selector, country code/name, and IANA time-zone storage.
 - One connection per provider per Bro user through a database uniqueness constraint.

@@ -40,7 +40,18 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
     setBusy(true);
     setMessage('');
     try {
-      const { error } = await createSupabaseBrowserClient().auth.signInWithOAuth({
+      const response = await fetch('/api/auth/config', { cache: 'no-store' });
+      const config = (await response.json()) as {
+        url?: string;
+        anonKey?: string;
+        error?: string;
+      };
+      if (!response.ok || !config.url || !config.anonKey)
+        throw new Error(config.error || 'Supabase is not configured.');
+      const { error } = await createSupabaseBrowserClient({
+        url: config.url,
+        anonKey: config.anonKey,
+      }).auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/api/auth/callback?next=/onboarding`,
