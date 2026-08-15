@@ -147,10 +147,23 @@ export async function executeToolThroughOwnedRoutes(
     cookie = request.headers.get('cookie');
   if (cookie) headers.set('cookie', cookie);
   if (route.body) headers.set('content-type', 'application/json');
-  const response = await fetch(new URL(path, request.url), {
+  // A server-side tool call must not loop through the public Railway HTTPS
+  // endpoint. In production that can terminate TLS differently from the
+  // internal listener and results in ERR_SSL_WRONG_VERSION_NUMBER. Use the
+  // local Next.js listener instead; the Supabase session cookie is forwarded
+  // so the nested route still performs its normal ownership checks.
+  const requestUrl = new URL(request.url),
+    internalOrigin =
+      requestUrl.hostname === 'localhost' ||
+      requestUrl.hostname === '127.0.0.1' ||
+      requestUrl.hostname === '::1'
+        ? requestUrl.origin
+        : `http://127.0.0.1:${process.env.PORT || '3000'}`;
+  const response = await fetch(new URL(path, internalOrigin), {
     method: route.method || 'GET',
     headers,
     body: route.body ? JSON.stringify(route.body(args)) : undefined,
+    cache: 'no-store',
   });
   const result = await response.json();
   if (!response.ok)

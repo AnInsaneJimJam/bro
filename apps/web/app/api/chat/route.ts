@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { and, eq } from 'drizzle-orm';
 import { resolveDemoCommand, validateToolCall } from '@bro/ai';
 import { requireUser } from '@/lib/auth';
 import { enforceRateLimit } from '@/lib/rate-limit';
@@ -151,7 +152,6 @@ export async function POST(req: Request) {
     await close?.();
   }
 }
-import { and, eq } from 'drizzle-orm';
 function summarizeAudit(value: unknown) {
   if (Array.isArray(value)) return { itemCount: value.length };
   if (!value || typeof value !== 'object') return {};
