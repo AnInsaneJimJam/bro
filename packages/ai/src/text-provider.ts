@@ -3,7 +3,11 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import type { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { zodToGeminiSchema } from './gemini-schema';
-import { createOpenRouterClient, parseJsonText } from './openrouter';
+import {
+  createOpenRouterClient,
+  isOpenRouterTimeout,
+  parseJsonText,
+} from './openrouter';
 
 export type TextProviderConfig =
   | { provider: 'gemini'; apiKey: string; model: string }
@@ -14,6 +18,7 @@ export type TextProviderConfig =
       model: string;
       siteUrl?: string;
       appName?: string;
+      timeoutMs?: number;
     };
 
 export async function generateStructuredText<T>(
@@ -52,19 +57,34 @@ export async function generateStructuredText<T>(
       target: 'jsonSchema7',
       $refStrategy: 'none',
     });
-    const response = await createOpenRouterClient(
-      config
-    ).chat.completions.create({
-      model: config.model,
-      temperature: 0.2,
-      messages: [
-        {
-          role: 'system',
-          content: `${input.system}\n\nReturn only one valid JSON object matching this schema. Do not include markdown fences or commentary.\n${JSON.stringify(jsonSchema)}`,
-        },
-        { role: 'user', content: input.user },
-      ],
-    });
+    let response;
+    try {
+      response = await createOpenRouterClient(config).chat.completions.create({
+        model: config.model,
+        temperature: 0.2,
+        // Topic cards and scripts do not need a long reasoning trace. Keeping
+        // reasoning off is materially faster on Nemotron and still leaves the
+        // schema validation below as the correctness boundary.
+        reasoning: { enabled: false },
+        max_tokens: 2_400,
+        messages: [
+          {
+            role: 'system',
+            content: `${input.system}\n\nReturn only one valid JSON object matching this schema. Do not include markdown fences or commentary.\n${JSON.stringify(jsonSchema)}`,
+          },
+          { role: 'user', content: input.user },
+        ],
+      } as never);
+    } catch (error) {
+      if (isOpenRouterTimeout(error))
+        throw Object.assign(
+          new Error(
+            'The AI provider took too long to respond. Try again or choose a faster OpenRouter model.'
+          ),
+          { status: 504, code: 'AI_PROVIDER_TIMEOUT', cause: error }
+        );
+      throw error;
+    }
     const text = response.choices[0]?.message?.content;
     if (!text)
       throw Object.assign(new Error('OpenRouter returned no structured text'), {

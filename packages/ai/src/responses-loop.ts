@@ -7,7 +7,7 @@ import {
   validateToolCall,
 } from './index';
 import { zodToGeminiSchema } from './gemini-schema';
-import { createOpenRouterClient } from './openrouter';
+import { createOpenRouterClient, isOpenRouterTimeout } from './openrouter';
 
 export type ToolExecutor = (
   name: ToolName,
@@ -139,11 +139,13 @@ export async function runOpenRouterToolLoop(input: {
   maxRounds?: number;
   siteUrl?: string;
   appName?: string;
+  timeoutMs?: number;
 }) {
   const client = createOpenRouterClient({
       apiKey: input.apiKey,
       siteUrl: input.siteUrl,
       appName: input.appName,
+      timeoutMs: input.timeoutMs,
     }),
     messages: OpenRouterLoopMessage[] = [
       { role: 'system', content: SYSTEM },
@@ -153,13 +155,25 @@ export async function runOpenRouterToolLoop(input: {
   for (let round = 0; round < (input.maxRounds ?? 6); round++) {
     // OpenRouter extends the OpenAI Chat Completions request with a reasoning
     // flag. Keep it in the request while preserving the SDK's compatibility.
-    const response = await client.chat.completions.create({
-      model: input.model,
-      messages: messages as never,
-      tools: createOpenRouterTools(),
-      tool_choice: 'auto',
-      reasoning: { enabled: true },
-    } as never);
+    let response;
+    try {
+      response = await client.chat.completions.create({
+        model: input.model,
+        messages: messages as never,
+        tools: createOpenRouterTools(),
+        tool_choice: 'auto',
+        reasoning: { enabled: true },
+      } as never);
+    } catch (error) {
+      if (isOpenRouterTimeout(error))
+        throw Object.assign(
+          new Error(
+            'The AI provider took too long to respond. Try again or choose a faster OpenRouter model.'
+          ),
+          { status: 504, code: 'AI_PROVIDER_TIMEOUT', cause: error }
+        );
+      throw error;
+    }
     const message = response.choices[0]?.message as OpenRouterMessage;
     if (!message)
       throw Object.assign(

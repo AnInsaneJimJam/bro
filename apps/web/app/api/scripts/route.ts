@@ -98,18 +98,27 @@ export async function POST(request: Request) {
       throw Object.assign(new Error('Owned topic opportunity not found'), {
         status: 404,
       });
-    const result = await generateStructuredText(textProviderConfig('script'), {
-      schema: shortScriptOutput,
-      schemaName: 'short_script',
-      system:
-        'Write a concise English vertical short-form video script. Stay grounded in the supplied opportunity references and meet the requested duration. Return platform metadata only for requested platforms.',
-      user: JSON.stringify({
-        ...topic,
-        targetDuration: body.duration,
-        platforms: body.platforms,
-        requestedAngle: body.angle,
-      }),
-    });
+    let result: z.infer<typeof shortScriptOutput>,
+      generationNotice: string | undefined;
+    try {
+      result = await generateStructuredText(textProviderConfig('script'), {
+        schema: shortScriptOutput,
+        schemaName: 'short_script',
+        system:
+          'Write a concise English vertical short-form video script. Stay grounded in the supplied opportunity references and meet the requested duration. Return platform metadata only for requested platforms.',
+        user: JSON.stringify({
+          ...topic,
+          targetDuration: body.duration,
+          platforms: body.platforms,
+          requestedAngle: body.angle,
+        }),
+      });
+    } catch (error) {
+      if (!isAiFallbackEligible(error)) throw error;
+      result = deterministicScript(topic, body);
+      generationNotice =
+        'The AI provider was unavailable, so Bro saved a transparent quick draft from the selected topic. You can edit it now or retry later for an AI rewrite.';
+    }
     const saved = await database.db.transaction(async (tx) => {
       const [script] = await tx
         .insert(scripts)
@@ -137,7 +146,7 @@ export async function POST(request: Request) {
       return script;
     });
     return NextResponse.json(
-      { ...saved, version: saved.currentVersion },
+      { ...saved, version: saved.currentVersion, generationNotice },
       { status: 201 }
     );
   } catch (error) {
@@ -145,6 +154,80 @@ export async function POST(request: Request) {
   } finally {
     await close?.();
   }
+}
+
+function isAiFallbackEligible(error: unknown) {
+  const value = error as { status?: number; code?: string };
+  return (
+    value?.code === 'AI_PROVIDER_TIMEOUT' ||
+    value?.status === 429 ||
+    (typeof value?.status === 'number' && value.status >= 500)
+  );
+}
+
+function deterministicScript(
+  topic: {
+    topic: string | null;
+    angle: string | null;
+    hook: string | null;
+    evidence: unknown;
+  },
+  body: z.infer<typeof create>
+): z.infer<typeof shortScriptOutput> {
+  const title = topic.topic?.trim() || 'A timely creator topic',
+    angle =
+      body.angle?.trim() ||
+      topic.angle?.trim() ||
+      'Explain the practical takeaway and show one concrete example.',
+    hook =
+      topic.hook?.trim() ||
+      body.angle?.trim() ||
+      `Most creators are missing this about ${title}.`,
+    references = Array.isArray(topic.evidence)
+      ? topic.evidence.flatMap((item) => {
+          if (!item || typeof item !== 'object') return [];
+          const reference = (item as { reference?: unknown }).reference;
+          return typeof reference === 'string' ? [reference] : [];
+        })
+      : [],
+    beats = [
+      { label: 'Hook', spoken: hook },
+      { label: 'Context', spoken: `Here is what is happening: ${title}.` },
+      { label: 'Takeaway', spoken: angle },
+      {
+        label: 'CTA',
+        spoken:
+          'Save this idea, and follow for more practical creator workflows.',
+      },
+    ],
+    youtube = body.platforms.includes('youtube')
+      ? {
+          title: title.slice(0, 100),
+          description: `${angle}\n\nSource: ${references.join(', ')}`.slice(
+            0,
+            5000
+          ),
+          hashtags: ['#Shorts'],
+        }
+      : undefined,
+    instagram = body.platforms.includes('instagram')
+      ? {
+          caption: `${hook}\n\n${angle}`.slice(0, 2200),
+          hashtags: ['#Reels'],
+        }
+      : undefined;
+  return {
+    workingTitle: title,
+    targetPlatforms: body.platforms,
+    targetDuration: body.duration,
+    hook,
+    beats,
+    cta: beats[beats.length - 1]!.spoken,
+    youtube,
+    instagram,
+    sourceReferences: references,
+    estimatedDuration: body.duration,
+  };
 }
 
 export async function PATCH(request: Request) {

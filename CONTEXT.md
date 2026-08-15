@@ -113,6 +113,7 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 - Comment sync is restricted to owned posts; filters include provider/post/date/keyword.
 - Comment analysis is grounded in the selected stored sample and exposes sample size, sync time, approximate sentiment caveat, and representative references.
 - AI is provider-configurable. OpenRouter/Nemotron Chat Completions with strict Zod validation and function calling is preferred when `OPENROUTER_API_KEY` is present; Gemini REST and OpenAI remain optional fallbacks. Audio command transcription still uses Gemini/OpenAI.
+- OpenRouter user-facing requests use `OPENROUTER_TIMEOUT_MS` (default 45 seconds), no SDK retries, and no reasoning trace for structured topic/script generation. Topic discovery sends only the top 12 scored official signals to the model; if the free provider times out or is rate-limited, Bro stores clearly labeled deterministic signal cards. Script creation similarly saves a clearly labeled editable quick draft when the model is unavailable, so a provider queue cannot hold a Railway request for five minutes.
 
 ### Upload and video processing
 

@@ -1,5 +1,12 @@
 import type { TextProviderConfig } from '@bro/ai';
 
+function openRouterTimeoutMs() {
+  const configured = Number(process.env.OPENROUTER_TIMEOUT_MS || 45_000);
+  return Number.isFinite(configured)
+    ? Math.min(120_000, Math.max(10_000, configured))
+    : 45_000;
+}
+
 export function textProviderConfig(kind: 'default' | 'script' = 'default') {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   if (openRouterKey)
@@ -13,6 +20,7 @@ export function textProviderConfig(kind: 'default' | 'script' = 'default') {
       siteUrl:
         process.env.OPENROUTER_SITE_URL || process.env.NEXT_PUBLIC_APP_URL,
       appName: process.env.OPENROUTER_APP_NAME || 'Bro',
+      timeoutMs: openRouterTimeoutMs(),
     } satisfies TextProviderConfig;
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey)

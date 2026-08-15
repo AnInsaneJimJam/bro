@@ -85,6 +85,7 @@ export async function POST(req: Request) {
                 executor: execute,
                 siteUrl: ai.siteUrl,
                 appName: ai.appName,
+                timeoutMs: ai.timeoutMs,
               })
             : await runResponsesToolLoop({
                 apiKey: ai.apiKey,

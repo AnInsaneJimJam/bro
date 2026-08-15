@@ -164,6 +164,7 @@ function Scripts() {
       s = await r.json();
     if (r.ok) {
       setSelected({ ...s, version: s.currentVersion || s.version });
+      setMessage(s.generationNotice || '');
       load();
     } else setMessage(s.error);
   }

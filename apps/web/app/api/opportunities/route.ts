@@ -242,17 +242,34 @@ export async function POST(request: Request) {
         };
       return { ...signal, components, score: scoreTrend(components) };
     });
-    const clustered = await generateStructuredText(textProviderConfig(), {
-      schema: topicOpportunityOutput,
-      schemaName: 'topic_opportunities',
-      system: `Cluster near-duplicate creator topic signals into ${body.count} or fewer useful English opportunity cards. Use only supplied signal IDs as evidence. State a caveat for single-source or weak evidence.`,
-      user: JSON.stringify({
-        niche: niche.label,
-        countryCode,
-        signals: scored,
-      }),
-    });
-    const allowed = new Set(scored.map((signal) => signal.externalId));
+    // Twenty-five raw search results plus metrics are unnecessary context for
+    // a small card-clustering task. Keep all official signals for storage and
+    // scoring, but send only the strongest twelve to the model.
+    const modelSignals = scored
+      .slice()
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 12);
+    let clustered: z.infer<typeof topicOpportunityOutput>;
+    try {
+      clustered = await generateStructuredText(textProviderConfig(), {
+        schema: topicOpportunityOutput,
+        schemaName: 'topic_opportunities',
+        system: `Cluster near-duplicate creator topic signals into ${body.count} or fewer useful English opportunity cards. Use only supplied signal IDs as evidence. State a caveat for single-source or weak evidence.`,
+        user: JSON.stringify({
+          niche: niche.label,
+          countryCode,
+          signals: modelSignals,
+        }),
+      });
+      coverage.ai = 'OpenRouter structured clustering';
+    } catch (error) {
+      // Official signals are still useful without an available model. Return
+      // transparent, one-signal-per-card opportunities rather than making the
+      // creator wait for the Railway request deadline or inventing a trend.
+      coverage.ai = `unavailable: ${safeAiError(error)}; deterministic signal cards used`;
+      clustered = deterministicCards(modelSignals, body.count, niche.label);
+    }
+    const allowed = new Set(modelSignals.map((signal) => signal.externalId));
     for (const item of clustered.items)
       if (item.evidenceIds.some((id) => !allowed.has(id)))
         throw Object.assign(
@@ -360,4 +377,32 @@ function overlap(left: Set<string>, right: Set<string>) {
   let common = 0;
   for (const value of left) if (right.has(value)) common++;
   return common / Math.max(left.size, right.size);
+}
+
+function safeAiError(error: unknown) {
+  const value = error as { status?: number; code?: string };
+  if (value?.code === 'AI_PROVIDER_TIMEOUT' || value?.status === 504)
+    return 'AI provider timeout';
+  if (value?.status === 429) return 'AI provider rate limit';
+  return 'AI clustering failed';
+}
+
+function deterministicCards(
+  signals: Array<TrendSignal & { score: number }>,
+  count: number,
+  niche: string
+): z.infer<typeof topicOpportunityOutput> {
+  return {
+    items: signals.slice(0, count).map((signal) => ({
+      topic: signal.title.trim().slice(0, 240) || `${niche} opportunity`,
+      reason:
+        'This is a recent official signal matching the confirmed niche and selected country.',
+      evidenceIds: [signal.externalId],
+      suggestedAngle: `Explain the practical takeaway for creators interested in ${niche}.`,
+      potentialHook:
+        'This topic is showing up right now—here is what creators should know.',
+      caveat:
+        'AI clustering was unavailable; this card is a direct single-source signal.',
+    })),
+  };
 }
