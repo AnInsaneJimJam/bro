@@ -109,10 +109,11 @@ export async function POST(req: Request) {
             (value as { requiresConfirmation?: boolean })
               .requiresConfirmation === true
         );
+      const assistantMessage = chatActionSummary(result) || result.text || '';
       await database.db.insert(chatMessages).values({
         threadId: ownedThreadId,
         role: 'assistant',
-        content: result.text || '',
+        content: assistantMessage,
         toolSummary: result.toolResults.map((item) => ({
           name: item.name,
           result: summarizeAudit(item.result),
@@ -120,7 +121,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({
         type: 'assistant',
-        message: result.text,
+        message: assistantMessage,
         responseId: result.responseId,
         mode: 'live',
         confirmations,
@@ -164,6 +165,31 @@ function summarizeAudit(value: unknown) {
     status: record.status,
     requiresConfirmation: record.requiresConfirmation,
   };
+}
+function chatActionSummary(result: {
+  toolResults: Array<{ name: string; result: unknown }>;
+}) {
+  for (const item of result.toolResults) {
+    const value = item.result;
+    if (!value || typeof value !== 'object') continue;
+    const record = value as Record<string, unknown>;
+    if (
+      item.name === 'generate_short_script' &&
+      typeof record.id === 'string'
+    ) {
+      const title =
+        typeof record.title === 'string' ? ` “${record.title}”` : '';
+      return `Script generated${title}. Open Scripts to review and edit it.`;
+    }
+    if (
+      item.name === 'discover_topic_opportunities' &&
+      Array.isArray(record.items)
+    )
+      return `Topic opportunities are ready. Open Ideas to review them.`;
+    if (item.name === 'sync_creator_content' && record.queued === true)
+      return 'Content sync queued. I will use the refreshed records for the next Bro action.';
+  }
+  return undefined;
 }
 function summarize(tool: string, result: unknown) {
   if (tool === 'infer_creator_niche')
