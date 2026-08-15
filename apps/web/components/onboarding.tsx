@@ -9,6 +9,8 @@ import {
   Youtube,
 } from 'lucide-react';
 import { countries } from '@/lib/countries';
+const defaultCountry =
+  countries.find((item) => item.code === 'IN') || countries[0]!;
 export function Onboarding({
   initialStep = 1,
   demoMode = false,
@@ -20,10 +22,8 @@ export function Onboarding({
 }) {
   const [step, setStep] = useState(initialStep);
   const [name, setName] = useState('Creator');
-  const [country, setCountry] = useState(
-    countries.find((item) => item.code === 'IN') || countries[0]!
-  );
-  const [countryQuery, setCountryQuery] = useState('');
+  const [country, setCountry] = useState(defaultCountry);
+  const [countryQuery, setCountryQuery] = useState(defaultCountry.name);
   const [niche, setNiche] = useState('');
   const [proposalId, setProposalId] = useState('');
   const [subNiches, setSubNiches] = useState<string[]>([]);
@@ -53,17 +53,6 @@ export function Onboarding({
   const [connectionMessage, setConnectionMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
-  const filteredCountries = countries.filter((item) =>
-    `${item.name} ${item.code}`
-      .toLowerCase()
-      .includes(countryQuery.trim().toLowerCase())
-  );
-  const countryOptions = filteredCountries.some(
-    (item) => item.code === country.code
-  )
-    ? filteredCountries
-    : [country, ...filteredCountries];
-
   useEffect(() => {
     void loadProfile();
     if (!demoMode) void refreshConnections();
@@ -122,7 +111,10 @@ export function Onboarding({
       const savedCountry = countries.find(
         (item) => item.code === profile.countryCode
       );
-      if (savedCountry) setCountry(savedCountry);
+      if (savedCountry) {
+        setCountry(savedCountry);
+        setCountryQuery(savedCountry.name);
+      }
     } catch {
       // A new account has no profile yet; the first onboarding step creates it.
     }
@@ -152,17 +144,28 @@ export function Onboarding({
   async function saveProfile() {
     setBusy(true);
     setError('');
+    const query = countryQuery.trim().toLowerCase();
+    const selectedCountry = countries.find(
+      (item) =>
+        item.name.toLowerCase() === query || item.code.toLowerCase() === query
+    );
+    if (!selectedCountry) {
+      setError('Choose a country from the suggestions or enter its ISO code.');
+      setBusy(false);
+      return;
+    }
     try {
       await requestJson('/api/profile', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           displayName: name,
-          countryCode: country.code,
-          countryName: country.name,
-          timeZone: country.zone,
+          countryCode: selectedCountry.code,
+          countryName: selectedCountry.name,
+          timeZone: selectedCountry.zone,
         }),
       });
+      setCountry(selectedCountry);
       setSaved(true);
       setStep(2);
     } catch (requestError) {
@@ -306,34 +309,46 @@ export function Onboarding({
               <input value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label>
-              Search country
+              Country
               <input
+                list="bro-country-options"
                 value={countryQuery}
-                onChange={(e) => setCountryQuery(e.target.value)}
-                placeholder="Type a country name or ISO code"
-                autoComplete="off"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCountryQuery(value);
+                  const query = value.trim().toLowerCase();
+                  const selected = countries.find(
+                    (item) =>
+                      item.name.toLowerCase() === query ||
+                      item.code.toLowerCase() === query
+                  );
+                  if (selected) setCountry(selected);
+                }}
+                placeholder="Search country name or ISO code"
+                autoComplete="country-name"
               />
-            </label>
-            <label>
-              Country ({countries.length} ISO options)
-              <select
-                value={country.code}
-                onChange={(e) =>
-                  setCountry(
-                    countries.find((c) => c.code === e.target.value) || country
-                  )
-                }
-              >
-                {countryOptions.map((c) => (
-                  <option value={c.code} key={c.code}>
-                    {c.name} ({c.code})
-                  </option>
+              <datalist id="bro-country-options">
+                {countries.map((item) => (
+                  <option value={item.name} label={item.code} key={item.code} />
                 ))}
-              </select>
+                {countries.map((item) => (
+                  <option
+                    value={item.code}
+                    label={item.name}
+                    key={`${item.code}-iso`}
+                  />
+                ))}
+              </datalist>
             </label>
             <div className="zone">
               <Globe2 />
-              Time zone <strong>{country.zone}</strong>
+              <span>
+                Selected{' '}
+                <strong>
+                  {country.name} ({country.code})
+                </strong>{' '}
+                · Time zone <strong>{country.zone}</strong>
+              </span>
             </div>
           </>
         )}

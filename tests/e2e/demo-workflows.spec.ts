@@ -42,6 +42,15 @@ test('login separates password authentication from the magic-link option', async
   ).toBeVisible();
 });
 
+test('onboarding uses one searchable country field', async ({ page }) => {
+  await page.goto('/onboarding');
+  await expect(page.getByLabel('Country')).toBeVisible();
+  await expect(page.getByLabel('Search country')).toHaveCount(0);
+  await expect(page.locator('select')).toHaveCount(0);
+  await page.getByLabel('Country').fill('US');
+  await expect(page.getByText(/Selected United States \(US\)/)).toBeVisible();
+});
+
 test('demo workspace labels data and navigates principal surfaces', async ({
   page,
 }, testInfo) => {
