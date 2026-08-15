@@ -39,7 +39,11 @@ export const toolSchemas = {
     countryCode: z.string().length(2),
   }),
   generate_short_script: z.object({
-    topicId: id,
+    // Use topicId for an opportunity from Bro's workspace. For a topic the
+    // creator explicitly names that is not in the current opportunity list,
+    // use topic instead and do not imply that it is a current trend.
+    topicId: id.optional(),
+    topic: z.string().min(2).max(240).optional(),
     durationSeconds: z.number().int().min(15).max(60),
     platforms: providers,
     angle: z.string().optional(),

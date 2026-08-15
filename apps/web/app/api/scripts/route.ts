@@ -15,9 +15,10 @@ import { jsonError } from '@/lib/http';
 import { textProviderConfig } from '@/lib/text-ai';
 
 const create = z.object({
-  topicId: z.string().uuid(),
+  topicId: z.string().uuid().optional(),
+  topic: z.string().trim().min(2).max(240).optional(),
   duration: z.number().int().min(15).max(60),
-  angle: z.string().max(500).optional(),
+  angle: z.string().trim().max(500).optional(),
   platforms: z
     .array(z.enum(['youtube', 'instagram']))
     .min(1)
@@ -70,30 +71,31 @@ export async function POST(request: Request) {
   try {
     const user = await requireUser(),
       body = create.parse(await request.json());
+    if (!body.topicId && !body.topic)
+      throw Object.assign(
+        new Error(
+          'Choose a topic opportunity or name the topic you want Bro to write about.'
+        ),
+        { status: 400, code: 'SCRIPT_TOPIC_REQUIRED' }
+      );
     if (user.demo)
       return NextResponse.json(
-        demoStore.generateScript(body.topicId, body.duration, body.angle),
+        body.topicId
+          ? demoStore.generateScript(body.topicId, body.duration, body.angle)
+          : demoStore.generateCustomScript(body.topic!, body.duration, body.angle),
         { status: 201 }
       );
     const database = createDatabase();
     close = database.close;
-    const [topic] = await database.db
-      .select({
-        id: topicOpportunities.id,
-        topic: topicOpportunities.topic,
-        angle: topicOpportunities.angle,
-        hook: topicOpportunities.hook,
-        evidence: topicOpportunities.evidence,
-      })
-      .from(topicOpportunities)
-      .innerJoin(trendRuns, eq(topicOpportunities.runId, trendRuns.id))
-      .where(
-        and(
-          eq(topicOpportunities.id, body.topicId),
-          eq(trendRuns.userId, user.id)
-        )
-      )
-      .limit(1);
+    const topic = body.topicId
+      ? await findOwnedOpportunity(database.db, user.id, body.topicId)
+      : {
+          id: null,
+          topic: body.topic!,
+          angle: body.angle || null,
+          hook: null,
+          evidence: [],
+        };
     if (!topic)
       throw Object.assign(new Error('Owned topic opportunity not found'), {
         status: 404,
@@ -105,9 +107,10 @@ export async function POST(request: Request) {
         schema: shortScriptOutput,
         schemaName: 'short_script',
         system:
-          'Write a concise English vertical short-form video script. Stay grounded in the supplied opportunity references and meet the requested duration. Return platform metadata only for requested platforms.',
+          `Write a concise English vertical short-form video script and meet the requested duration. ${topic.id ? 'Stay grounded in the supplied opportunity references.' : 'This is an evergreen creator-supplied topic, not a live trend; do not invent current evidence or claim it is trending.'} Return platform metadata only for requested platforms.`,
         user: JSON.stringify({
           ...topic,
+          topicSource: topic.id ? 'workspace_opportunity' : 'creator_supplied',
           targetDuration: body.duration,
           platforms: body.platforms,
           requestedAngle: body.angle,
@@ -117,8 +120,9 @@ export async function POST(request: Request) {
       if (!isAiFallbackEligible(error)) throw error;
       result = deterministicScript(topic, body);
       generationNotice =
-        'The AI provider was unavailable, so Bro saved a transparent quick draft from the selected topic. You can edit it now or retry later for an AI rewrite.';
+        `The AI provider was unavailable, so Bro saved a transparent quick draft from the ${topic.id ? 'selected opportunity' : 'creator-supplied topic'}. You can edit it now or retry later for an AI rewrite.`;
     }
+    if (!topic.id) result = { ...result, sourceReferences: [] };
     const saved = await database.db.transaction(async (tx) => {
       const [script] = await tx
         .insert(scripts)
@@ -135,6 +139,8 @@ export async function POST(request: Request) {
             instagram: result.instagram,
             sourceReferences: result.sourceReferences,
             estimatedDuration: result.estimatedDuration,
+            topicSource: topic.id ? 'workspace_opportunity' : 'creator_supplied',
+            creatorTopic: topic.id ? undefined : topic.topic,
           },
           currentVersion: 1,
         })
@@ -154,6 +160,31 @@ export async function POST(request: Request) {
   } finally {
     await close?.();
   }
+}
+
+async function findOwnedOpportunity(
+  database: ReturnType<typeof createDatabase>['db'],
+  userId: string,
+  topicId: string
+) {
+  const [topic] = await database
+    .select({
+      id: topicOpportunities.id,
+      topic: topicOpportunities.topic,
+      angle: topicOpportunities.angle,
+      hook: topicOpportunities.hook,
+      evidence: topicOpportunities.evidence,
+    })
+    .from(topicOpportunities)
+    .innerJoin(trendRuns, eq(topicOpportunities.runId, trendRuns.id))
+    .where(
+      and(
+        eq(topicOpportunities.id, topicId),
+        eq(trendRuns.userId, userId)
+      )
+    )
+    .limit(1);
+  return topic;
 }
 
 function isAiFallbackEligible(error: unknown) {

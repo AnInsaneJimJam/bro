@@ -56,6 +56,7 @@ export async function executeToolThroughOwnedRoutes(
       method: 'POST',
       body: (a) => ({
         topicId: a.topicId,
+        topic: a.topic,
         duration: a.durationSeconds,
         platforms: a.platforms,
         angle: a.angle,

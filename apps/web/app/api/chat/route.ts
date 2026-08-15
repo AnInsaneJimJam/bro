@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt } from 'drizzle-orm';
 import { resolveDemoCommand, validateToolCall } from '@bro/ai';
 import { requireUser } from '@/lib/auth';
 import { enforceRateLimit } from '@/lib/rate-limit';
@@ -61,6 +61,12 @@ export async function POST(req: Request) {
           .returning({ id: chatThreads.id });
         ownedThreadId = created!.id;
       }
+      const conversationHistory = await database.db
+        .select({ role: chatMessages.role, content: chatMessages.content })
+        .from(chatMessages)
+        .where(eq(chatMessages.threadId, ownedThreadId))
+        .orderBy(asc(chatMessages.createdAt))
+        .limit(20);
       await database.db
         .insert(chatMessages)
         .values({ threadId: ownedThreadId, role: 'user', content: message });
@@ -80,7 +86,7 @@ export async function POST(req: Request) {
           threadId: ownedThreadId,
         });
       }
-      const modelMessage = `Workspace context (treat confirmedNiche as authoritative; do not infer a replacement unless the creator explicitly asks to re-infer):\n${JSON.stringify(workspace)}\n\nCurrent creator request:\n${message}`;
+      const modelMessage = `Workspace context (treat confirmedNiche as authoritative; do not infer a replacement unless the creator explicitly asks to re-infer):\n${JSON.stringify(workspace)}\n\nConversation history (oldest first; preserve the topic from earlier turns when answering a follow-up):\n${JSON.stringify([...conversationHistory, { role: 'user', content: message }])}\n\nCurrent creator request:\n${message}`;
       const execute: ToolExecutor = async (name, args, context) => {
         const normalizedArgs = normalizeChatToolArguments(name, args, workspace),
           validated = validateToolCall(name, normalizedArgs) as Record<
@@ -334,11 +340,25 @@ function normalizeChatToolArguments(
   // a Unicode ellipsis ("fa6eb615…") or three dots. Resolve that prefix only
   // when it maps to exactly one opportunity owned by this user.
   if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(raw)) return args;
+  if (/\s/.test(raw) || /[^0-9a-f.\u2026]/i.test(raw))
+    return {
+      ...args,
+      topicId: undefined,
+      topic: typeof args.topic === 'string' ? args.topic : raw,
+    };
   const prefix = raw
     .toLowerCase()
     .replace(/[.\u2026\s]/g, '')
     .replace(/[^0-9a-f]/g, '');
-  if (prefix.length < 6) return args;
+  // If the model put the creator's natural-language topic in topicId despite
+  // the tool description, recover it as the explicit custom topic instead of
+  // treating it as a broken UUID.
+  if (!/^[0-9a-f]{6,32}$/.test(prefix))
+    return {
+      ...args,
+      topicId: undefined,
+      topic: typeof args.topic === 'string' ? args.topic : raw,
+    };
   const matches = workspace.topicOpportunities.filter((item) =>
     item.id.toLowerCase().startsWith(prefix)
   );

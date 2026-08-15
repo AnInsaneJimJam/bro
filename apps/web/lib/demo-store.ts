@@ -179,6 +179,35 @@ export const demoStore = {
     scripts.unshift(script);
     return structuredClone(script);
   },
+  generateCustomScript(topic: string, duration: number, angle?: string) {
+    const title = topic.trim(),
+      hook = `The idea that powers every message, app, and AI model started with ${title}.`,
+      script: DemoScript = {
+        id: crypto.randomUUID(),
+        title,
+        duration,
+        hook,
+        beats: [
+          { label: 'Hook', spoken: hook },
+          {
+            label: 'Context',
+            spoken: `${title} changed how we think about information and communication.`,
+          },
+          {
+            label: 'Payoff',
+            spoken:
+              angle ||
+              'The practical lesson is to remove noise, preserve the signal, and make the next idea easy to understand.',
+          },
+          { label: 'CTA', spoken: 'Save this for your next deep-dive short.' },
+        ],
+        cta: 'Save this for your next deep-dive short.',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+      };
+    scripts.unshift(script);
+    return structuredClone(script);
+  },
   listScripts: () => structuredClone(scripts),
   updateScript(
     id: string,

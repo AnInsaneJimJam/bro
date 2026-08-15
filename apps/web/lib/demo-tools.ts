@@ -17,11 +17,17 @@ export async function executeDemoTool(
     case 'discover_topic_opportunities':
       return demoStore.opportunities(Number(args.count || 5));
     case 'generate_short_script':
-      return demoStore.generateScript(
-        String(args.topicId),
-        Number(args.durationSeconds),
-        typeof args.angle === 'string' ? args.angle : undefined
-      );
+      return typeof args.topic === 'string'
+        ? demoStore.generateCustomScript(
+            args.topic,
+            Number(args.durationSeconds),
+            typeof args.angle === 'string' ? args.angle : undefined
+          )
+        : demoStore.generateScript(
+            String(args.topicId),
+            Number(args.durationSeconds),
+            typeof args.angle === 'string' ? args.angle : undefined
+          );
     case 'list_scripts':
       return demoStore.listScripts();
     case 'transcribe_video_for_captions':
