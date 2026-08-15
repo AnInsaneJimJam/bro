@@ -15,10 +15,12 @@ export type ToolExecutor = (
   context: { callId: string }
 ) => Promise<unknown>;
 const descriptions: Record<ToolName, string> = {
-  get_creator_profile: 'Get the authenticated creator profile.',
+  get_creator_profile:
+    'Get the authenticated creator profile, country, and confirmed niche.',
   get_connection_status: 'Check connected account health.',
   sync_creator_content: 'Queue owned-content synchronization.',
-  infer_creator_niche: 'Infer a niche from bounded stored owned content.',
+  infer_creator_niche:
+    'Infer or re-infer a niche from bounded stored owned content only when the creator explicitly asks. Do not use this for a confirmed-niche question.',
   confirm_creator_niche: 'Confirm or edit a proposed niche.',
   discover_topic_opportunities:
     'Discover evidence-backed opportunities for the confirmed niche and country.',
@@ -239,6 +241,7 @@ export async function runOpenRouterToolLoop(input: {
       calls.some((call) =>
         [
           'infer_creator_niche',
+          'confirm_creator_niche',
           'discover_topic_opportunities',
           'generate_short_script',
         ].includes(call.function.name)
@@ -330,7 +333,7 @@ export async function runGeminiToolLoop(input: {
   }
   throw new Error('Bro exceeded the maximum Gemini tool-call rounds');
 }
-const SYSTEM = `You are Bro, a concise English creator workflow assistant. Use only the supplied application tools for data and actions. Never claim current trends without tool evidence. Never guess required video, platform, duration, date, time, or time zone; ask one precise follow-up. Externally visible actions remain governed by application confirmation and auto-publish policy. Subtitle transcription and caption burn-in are not enabled in this MVP; if asked, explain that the creator can upload and publish the original video now and that subtitle editing is planned for a later slice. Never request, reveal, or accept OAuth tokens or passwords.`;
+const SYSTEM = `You are Bro, a concise English creator workflow assistant. Use only the supplied application tools for data and actions. Treat a workspace confirmedNiche as authoritative; never replace it with a new inference unless the creator explicitly asks to re-infer. For “what is my niche?” answer from confirmedNiche or proposedNiche context and do not call infer_creator_niche. Never claim current trends without tool evidence. For script requests, use only an exact topic opportunity ID from workspace context; if the requested topic is not listed, ask the creator to choose or create an opportunity and ask for any missing duration or platforms. Never guess required video, platform, duration, date, time, or time zone; ask one precise follow-up. Externally visible actions remain governed by application confirmation and auto-publish policy. Subtitle transcription and caption burn-in are not enabled in this MVP; if asked, explain that the creator can upload and publish the original video now and that subtitle editing is planned for a later slice. Never request, reveal, or accept OAuth tokens or passwords.`;
 
 type GeminiPart = {
   text?: string;

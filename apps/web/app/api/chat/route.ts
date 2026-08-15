@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, gt } from 'drizzle-orm';
 import { resolveDemoCommand, validateToolCall } from '@bro/ai';
 import { requireUser } from '@/lib/auth';
 import { enforceRateLimit } from '@/lib/rate-limit';
@@ -13,7 +13,15 @@ import {
   type ToolExecutor,
 } from '@bro/ai/responses-loop';
 import { executeToolThroughOwnedRoutes } from '@/lib/tool-api';
-import { chatMessages, chatThreads, createDatabase } from '@bro/db';
+import {
+  chatMessages,
+  chatThreads,
+  createDatabase,
+  nicheVersions,
+  scripts,
+  topicOpportunities,
+  trendRuns,
+} from '@bro/db';
 import { executeAuditedTool } from '@/lib/tool-audit';
 import { textProviderConfig } from '@/lib/text-ai';
 const input = z.object({
@@ -56,6 +64,23 @@ export async function POST(req: Request) {
       await database.db
         .insert(chatMessages)
         .values({ threadId: ownedThreadId, role: 'user', content: message });
+      const workspace = await loadChatWorkspace(database.db, user.id),
+        directNicheReply = confirmedNicheReply(message, workspace);
+      if (directNicheReply) {
+        await database.db.insert(chatMessages).values({
+          threadId: ownedThreadId,
+          role: 'assistant',
+          content: directNicheReply,
+        });
+        return NextResponse.json({
+          type: 'assistant',
+          message: directNicheReply,
+          mode: 'live',
+          confirmations: [],
+          threadId: ownedThreadId,
+        });
+      }
+      const modelMessage = `Workspace context (treat confirmedNiche as authoritative; do not infer a replacement unless the creator explicitly asks to re-infer):\n${JSON.stringify(workspace)}\n\nCurrent creator request:\n${message}`;
       const execute: ToolExecutor = async (name, args, context) => {
         const validated = validateToolCall(name, args) as Record<
           string,
@@ -75,14 +100,14 @@ export async function POST(req: Request) {
           ? await runGeminiToolLoop({
               apiKey: ai.apiKey,
               model: ai.model,
-              message,
+              message: modelMessage,
               executor: execute,
             })
           : ai.provider === 'openrouter'
             ? await runOpenRouterToolLoop({
                 apiKey: ai.apiKey,
                 model: ai.model,
-                message,
+                message: modelMessage,
                 executor: execute,
                 siteUrl: ai.siteUrl,
                 appName: ai.appName,
@@ -91,7 +116,7 @@ export async function POST(req: Request) {
             : await runResponsesToolLoop({
                 apiKey: ai.apiKey,
                 model: ai.model,
-                message,
+                message: modelMessage,
                 executor: execute,
               });
       const confirmations = result.toolResults
@@ -166,6 +191,112 @@ function summarizeAudit(value: unknown) {
     requiresConfirmation: record.requiresConfirmation,
   };
 }
+type ChatWorkspace = {
+  confirmedNiche: {
+    id: string;
+    label: string | null;
+    subNiches: unknown;
+  } | null;
+  proposedNiche: {
+    id: string;
+    label: string | null;
+    subNiches: unknown;
+  } | null;
+  topicOpportunities: Array<{
+    id: string;
+    topic: string | null;
+    angle: string | null;
+    score: number | null;
+  }>;
+  recentScripts: Array<{
+    id: string;
+    title: string | null;
+    duration: number | null;
+  }>;
+};
+async function loadChatWorkspace(
+  database: ReturnType<typeof createDatabase>['db'],
+  userId: string
+): Promise<ChatWorkspace> {
+  const [niches, opportunities, recentScripts] = await Promise.all([
+    database
+      .select({
+        id: nicheVersions.id,
+        label: nicheVersions.label,
+        subNiches: nicheVersions.subNiches,
+        status: nicheVersions.status,
+      })
+      .from(nicheVersions)
+      .where(eq(nicheVersions.userId, userId))
+      .orderBy(desc(nicheVersions.updatedAt))
+      .limit(5),
+    database
+      .select({
+        id: topicOpportunities.id,
+        topic: topicOpportunities.topic,
+        angle: topicOpportunities.angle,
+        score: topicOpportunities.score,
+      })
+      .from(topicOpportunities)
+      .innerJoin(trendRuns, eq(topicOpportunities.runId, trendRuns.id))
+      .where(
+        and(
+          eq(trendRuns.userId, userId),
+          eq(trendRuns.status, 'ready'),
+          gt(trendRuns.expiresAt, new Date())
+        )
+      )
+      .orderBy(desc(topicOpportunities.score))
+      .limit(10),
+    database
+      .select({
+        id: scripts.id,
+        title: scripts.title,
+        duration: scripts.duration,
+      })
+      .from(scripts)
+      .where(eq(scripts.userId, userId))
+      .orderBy(desc(scripts.updatedAt))
+      .limit(10),
+  ]);
+  const toNiche = (value: (typeof niches)[number] | undefined) =>
+    value
+      ? { id: value.id, label: value.label, subNiches: value.subNiches }
+      : null;
+  return {
+    confirmedNiche: toNiche(niches.find((item) => item.status === 'confirmed')),
+    proposedNiche: toNiche(niches.find((item) => item.status === 'proposed')),
+    topicOpportunities: opportunities,
+    recentScripts,
+  };
+}
+function confirmedNicheReply(
+  message: string,
+  workspace: ChatWorkspace
+): string | undefined {
+  const normalized = message
+    .trim()
+    .toLowerCase()
+    .replace(/[?!.,]/g, '')
+    .replace(/\s+/g, ' ');
+  if (
+    !/^(what(?:'s|s| is) my niche|what is my confirmed niche|show my niche|my niche)$/.test(
+      normalized
+    )
+  )
+    return undefined;
+  if (workspace.confirmedNiche?.label) {
+    const subNiches = Array.isArray(workspace.confirmedNiche.subNiches)
+      ? workspace.confirmedNiche.subNiches.filter(
+          (value): value is string => typeof value === 'string'
+        )
+      : [];
+    return `Your confirmed niche is ${workspace.confirmedNiche.label}.${subNiches.length ? ` Sub-niches: ${subNiches.join(', ')}.` : ''} Bro will use this niche for topic opportunities.`;
+  }
+  if (workspace.proposedNiche?.label)
+    return `Your current proposed niche is ${workspace.proposedNiche.label}, but it is not confirmed yet. Confirm or edit it before discovering topics.`;
+  return 'You do not have a confirmed niche yet. Open the niche review step and confirm one before discovering topics.';
+}
 function chatActionSummary(result: {
   toolResults: Array<{ name: string; result: unknown }>;
 }) {
@@ -192,6 +323,11 @@ function chatActionSummary(result: {
         : [];
       return `I found a proposed niche: ${record.label}${subNiches.length ? ` (${subNiches.join(', ')})` : ''}. Open Ideas or the niche review step to confirm or edit it before discovering topics.`;
     }
+    if (
+      item.name === 'confirm_creator_niche' &&
+      typeof record.label === 'string'
+    )
+      return `Niche confirmed as ${record.label}. Bro will use it for topic opportunities.`;
     if (
       item.name === 'discover_topic_opportunities' &&
       Array.isArray(record.items)
