@@ -76,6 +76,7 @@ export function Dashboard() {
   const [recording, setRecording] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [home, setHome] = useState<HomeData | null>(null);
+  const autoDiscoveryAttempted = useRef(false);
   const [confirmation, setConfirmation] = useState<{
     jobId: string;
     card: {
@@ -114,6 +115,63 @@ export function Dashboard() {
         } as HomeData;
         setHome(safe);
         setDemoMode(safe.mode === 'demo');
+        if (
+          safe.mode !== 'demo' &&
+          safe.opportunities.length === 0 &&
+          safe.niche?.label &&
+          safe.profile?.countryCode &&
+          !autoDiscoveryAttempted.current
+        ) {
+          autoDiscoveryAttempted.current = true;
+          setNotice('Finding fresh topic opportunities for your niche…');
+          void fetch('/api/opportunities', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ count: 5 }),
+          })
+            .then(async (response) => {
+              const result = await response.json();
+              if (!response.ok)
+                throw new Error(
+                  result.error || 'No fresh topic signals are available yet.'
+                );
+              return result;
+            })
+            .then((result) => {
+              const items = Array.isArray(result.items) ? result.items : [];
+              if (!items.length) return;
+              setHome((current) =>
+                current
+                  ? {
+                      ...current,
+                      opportunities: items.map(
+                        (item: HomeData['opportunities'][number]) => ({
+                          ...item,
+                          createdAt:
+                            item.createdAt ||
+                            (
+                              item as HomeData['opportunities'][number] & {
+                                freshness?: string;
+                              }
+                            ).freshness ||
+                            new Date().toISOString(),
+                        })
+                      ),
+                    }
+                  : current
+              );
+              setNotice(`Found ${items.length} topic opportunities.`);
+              window.setTimeout(() => setNotice(''), 6000);
+            })
+            .catch((error) => {
+              setNotice(
+                error instanceof Error
+                  ? error.message
+                  : 'No fresh topic signals are available yet.'
+              );
+              window.setTimeout(() => setNotice(''), 7000);
+            });
+        }
       })
       .catch((error) => {
         setHome({
