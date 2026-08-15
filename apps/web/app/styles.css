@@ -1488,6 +1488,27 @@ header p {
   width: 100%;
   justify-content: center;
 }
+.password-auth-actions {
+  display: grid;
+  gap: 10px;
+}
+.auth-choice-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.auth-choice-divider::before,
+.auth-choice-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
 .login-card > a {
   display: block;
   text-align: center;

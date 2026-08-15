@@ -72,17 +72,26 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
               placeholder="At least 8 characters"
             />
           </label>
-          <button disabled={busy}>
-            Sign in <ArrowRight />
-          </button>
-          <button
-            className="secondary-login"
-            type="button"
-            disabled={busy}
-            onClick={() => passwordAuth('sign_up')}
+          <div className="password-auth-actions">
+            <button disabled={busy}>
+              Sign in <ArrowRight />
+            </button>
+            <button
+              className="secondary-login"
+              type="button"
+              disabled={busy}
+              onClick={() => passwordAuth('sign_up')}
+            >
+              Create account
+            </button>
+          </div>
+          <div
+            className="auth-choice-divider"
+            role="separator"
+            aria-label="Or use a passwordless magic link"
           >
-            Create account
-          </button>
+            <span>OR</span>
+          </div>
           <button
             className="secondary-login"
             type="button"

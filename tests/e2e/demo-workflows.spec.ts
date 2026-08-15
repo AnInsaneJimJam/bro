@@ -24,6 +24,24 @@ test('landing page leads into YouTube and Instagram connection onboarding', asyn
   await expect(page.getByText(/Demo mode does not call YouTube/)).toBeVisible();
 });
 
+test('login separates password authentication from the magic-link option', async ({
+  page,
+}) => {
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create account' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('separator', {
+      name: 'Or use a passwordless magic link',
+    })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Email me a magic link' })
+  ).toBeVisible();
+});
+
 test('demo workspace labels data and navigates principal surfaces', async ({
   page,
 }, testInfo) => {
