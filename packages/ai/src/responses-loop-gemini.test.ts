@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runGeminiToolLoop } from './responses-loop';
+import {
+  createGeminiFunctionDeclarations,
+  runGeminiToolLoop,
+} from './responses-loop';
 
 describe('Gemini tool loop', () => {
+  it('uses Gemini-compatible function schemas', () => {
+    expect(JSON.stringify(createGeminiFunctionDeclarations())).not.toContain(
+      'additionalProperties'
+    );
+  });
+
   it('executes a validated tool and returns the final answer', async () => {
     const http = vi
       .fn()

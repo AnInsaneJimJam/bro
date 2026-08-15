@@ -13,6 +13,9 @@ describe('Gemini structured text provider', () => {
       expect(body.generationConfig.responseSchema).toBeTruthy();
       expect(body.generationConfig.responseSchema.$ref).toBeUndefined();
       expect(body.generationConfig.responseSchema.definitions).toBeUndefined();
+      expect(JSON.stringify(body.generationConfig.responseSchema)).not.toContain(
+        'additionalProperties'
+      );
       return new Response(
         JSON.stringify({
           candidates: [

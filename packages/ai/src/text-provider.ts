@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { z } from 'zod';
+import { zodToGeminiSchema } from './gemini-schema';
 
 export type TextProviderConfig =
   | { provider: 'gemini'; apiKey: string; model: string }
@@ -51,10 +51,7 @@ export async function generateStructuredText<T>(
         contents: [{ role: 'user', parts: [{ text: input.user }] }],
         generationConfig: {
           responseMimeType: 'application/json',
-          responseSchema: zodToJsonSchema(input.schema, {
-            target: 'openApi3',
-            $refStrategy: 'none',
-          }),
+          responseSchema: zodToGeminiSchema(input.schema),
         },
       }),
     }

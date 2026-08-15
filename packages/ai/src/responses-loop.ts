@@ -1,12 +1,12 @@
 import OpenAI from 'openai';
 import { zodResponsesFunction } from 'openai/helpers/zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   isDeferredVideoEditingTool,
   toolSchemas,
   type ToolName,
   validateToolCall,
 } from './index';
+import { zodToGeminiSchema } from './gemini-schema';
 
 export type ToolExecutor = (
   name: ToolName,
@@ -57,10 +57,7 @@ export function createGeminiFunctionDeclarations() {
     .map(([name, schema]) => ({
       name,
       description: descriptions[name as ToolName],
-      parameters: zodToJsonSchema(schema, {
-        target: 'openApi3',
-        $refStrategy: 'none',
-      }),
+      parameters: zodToGeminiSchema(schema),
     }));
 }
 
