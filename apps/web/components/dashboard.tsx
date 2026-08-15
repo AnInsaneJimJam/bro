@@ -97,12 +97,37 @@ export function Dashboard() {
     };
     choose();
     fetch('/api/home')
-      .then((response) => response.json())
-      .then((data) => {
-        setHome(data);
-        setDemoMode(data.mode === 'demo');
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(data.error || 'Could not load your workspace.');
+        return data;
       })
-      .catch(() => {});
+      .then((data) => {
+        const safe = {
+          ...data,
+          opportunities: Array.isArray(data.opportunities)
+            ? data.opportunities
+            : [],
+          connections: Array.isArray(data.connections) ? data.connections : [],
+          failedJobs: Array.isArray(data.failedJobs) ? data.failedJobs : [],
+        } as HomeData;
+        setHome(safe);
+        setDemoMode(safe.mode === 'demo');
+      })
+      .catch((error) => {
+        setHome({
+          mode: 'live',
+          opportunities: [],
+          connections: [],
+          failedJobs: [],
+        });
+        setNotice(
+          error instanceof Error
+            ? error.message
+            : 'Could not load your workspace.'
+        );
+      });
     addEventListener('hashchange', choose);
     return () => removeEventListener('hashchange', choose);
   }, []);
