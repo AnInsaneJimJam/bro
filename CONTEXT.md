@@ -61,7 +61,7 @@ The live database was checked with an aggregate, read-only query. At the last ch
 
 Therefore no real YouTube or Instagram publish has been credential-verified yet. The blocker is not an unimplemented publish route; a user still needs to complete OAuth and supply an account that the provider allows the app to access.
 
-The hosted environment has the expected Google/Instagram/Supabase/security configuration variables present, but `GEMINI_API_KEY` and `OPENAI_API_KEY` are not configured. Uploading and publishing do not require an AI key. Niche inference, topic synthesis, script generation, typed AI chat, comment analysis, and recorded audio commands do.
+The hosted environment has the expected Google/Instagram/Supabase/security configuration variables present. Text AI is now provider-configurable with OpenRouter/Nemotron preferred, Gemini optional, and OpenAI optional. Uploading and publishing do not require an AI key. Niche inference, topic synthesis, script generation, typed AI chat, and comment analysis require a text provider; recorded audio commands additionally require Gemini or OpenAI because Nemotron is text-only.
 
 The Gemini key previously pasted in chat was not stored or deployed. It should be revoked and replaced with a fresh key before enabling AI.
 
@@ -74,7 +74,7 @@ packages/db               Drizzle schema, migrations, typed database helpers, se
 packages/core             domain state machines, scheduling, authorization, scoring,
                           encryption and redaction helpers
 packages/integrations     YouTube, Instagram, Reddit adapters and provider errors
-packages/ai               Gemini/OpenAI text/tool loops, strict schemas, transcription
+packages/ai               OpenRouter/Nemotron, Gemini/OpenAI text/tool loops, strict schemas, transcription
 packages/video             ffprobe/FFmpeg validation, normalization and caption primitives
 ```
 
@@ -112,7 +112,7 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 - Script generation/editing/versioning/duplicate/regenerate routes and UI exist.
 - Comment sync is restricted to owned posts; filters include provider/post/date/keyword.
 - Comment analysis is grounded in the selected stored sample and exposes sample size, sync time, approximate sentiment caveat, and representative references.
-- AI is provider-configurable. Gemini REST structured output/function calling is implemented; OpenAI remains an optional fallback.
+- AI is provider-configurable. OpenRouter/Nemotron Chat Completions with strict Zod validation and function calling is preferred when `OPENROUTER_API_KEY` is present; Gemini REST and OpenAI remain optional fallbacks. Audio command transcription still uses Gemini/OpenAI.
 
 ### Upload and video processing
 
@@ -308,7 +308,7 @@ Never send access tokens, refresh tokens, client secrets, service-role keys, dat
 - No real provider publish has been verified in this repository because no account is connected.
 - Instagram long-lived-token exchange/refresh behavior must be revalidated against the exact Meta product/API version selected in the provider console before public launch.
 - A credential-backed Supabase/RLS integration test with two real users is still missing; route-level ownership checks and RLS migrations exist.
-- AI paths return a configuration error when no Gemini/OpenAI key is configured; they must not fall back to fabricated live data.
+- AI paths return a configuration error when no OpenRouter/Gemini/OpenAI text key is configured; recorded audio commands separately require Gemini/OpenAI. They must not fall back to fabricated live data.
 - Subtitle transcription, caption editing, caption rendering, and subtitle tool commands are intentionally deferred.
 - Upload progress is state-based rather than byte-progress based; Supabase signed upload is used directly from the browser.
 - Provider APIs can reject media, permissions, quotas, or accounts even when the application code is healthy; those errors must be handled as provider limitations, not hidden.

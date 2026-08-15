@@ -7,6 +7,7 @@ import {
   validateToolCall,
 } from './index';
 import { zodToGeminiSchema } from './gemini-schema';
+import { createOpenRouterClient } from './openrouter';
 
 export type ToolExecutor = (
   name: ToolName,
@@ -58,6 +59,19 @@ export function createGeminiFunctionDeclarations() {
       name,
       description: descriptions[name as ToolName],
       parameters: zodToGeminiSchema(schema),
+    }));
+}
+
+export function createOpenRouterTools() {
+  return Object.entries(toolSchemas)
+    .filter(([name]) => !isDeferredVideoEditingTool(name))
+    .map(([name, schema]) => ({
+      type: 'function' as const,
+      function: {
+        name,
+        description: descriptions[name as ToolName],
+        parameters: zodToGeminiSchema(schema),
+      },
     }));
 }
 
@@ -115,6 +129,90 @@ export async function runResponsesToolLoop(input: {
     });
   }
   throw new Error('Bro exceeded the maximum tool-call rounds');
+}
+
+export async function runOpenRouterToolLoop(input: {
+  apiKey: string;
+  model: string;
+  message: string;
+  executor: ToolExecutor;
+  maxRounds?: number;
+  siteUrl?: string;
+  appName?: string;
+}) {
+  const client = createOpenRouterClient({
+      apiKey: input.apiKey,
+      siteUrl: input.siteUrl,
+      appName: input.appName,
+    }),
+    messages: OpenRouterLoopMessage[] = [
+      { role: 'system', content: SYSTEM },
+      { role: 'user', content: input.message },
+    ],
+    toolResults: Array<{ name: ToolName; result: unknown }> = [];
+  for (let round = 0; round < (input.maxRounds ?? 6); round++) {
+    // OpenRouter extends the OpenAI Chat Completions request with a reasoning
+    // flag. Keep it in the request while preserving the SDK's compatibility.
+    const response = await client.chat.completions.create({
+      model: input.model,
+      messages: messages as never,
+      tools: createOpenRouterTools(),
+      tool_choice: 'auto',
+      reasoning: { enabled: true },
+    } as never);
+    const message = response.choices[0]?.message as OpenRouterMessage;
+    if (!message)
+      throw Object.assign(
+        new Error('OpenRouter returned no assistant message'),
+        {
+          status: 502,
+        }
+      );
+    const calls = message.tool_calls || [];
+    messages.push({
+      role: 'assistant',
+      content: message.content,
+      ...(calls.length ? { tool_calls: calls } : {}),
+      ...(message.reasoning_details !== undefined
+        ? { reasoning_details: message.reasoning_details }
+        : {}),
+    });
+    if (!calls.length)
+      return {
+        responseId: response.id,
+        text: message.content || '',
+        toolCalls: round,
+        toolResults,
+      };
+    for (const call of calls) {
+      let rawArgs: unknown;
+      try {
+        rawArgs = JSON.parse(call.function.arguments || '{}');
+      } catch (error) {
+        throw Object.assign(
+          new Error('OpenRouter returned invalid tool arguments'),
+          {
+            status: 502,
+            cause: error,
+          }
+        );
+      }
+      const args = validateToolCall(call.function.name, rawArgs) as Record<
+          string,
+          unknown
+        >,
+        result = await input.executor(call.function.name as ToolName, args, {
+          callId: call.id,
+        });
+      toolResults.push({ name: call.function.name as ToolName, result });
+      messages.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: JSON.stringify(result),
+      });
+    }
+  }
+  throw new Error('Bro exceeded the maximum OpenRouter tool-call rounds');
 }
 
 export async function runGeminiToolLoop(input: {
@@ -209,6 +307,26 @@ type GeminiPart = {
     id?: string;
   };
 };
+type OpenRouterToolCall = {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+};
+type OpenRouterMessage = {
+  role: 'assistant';
+  content: string | null;
+  tool_calls?: OpenRouterToolCall[];
+  reasoning_details?: unknown;
+};
+type OpenRouterLoopMessage =
+  | { role: 'system' | 'user'; content: string }
+  | {
+      role: 'assistant';
+      content: string | null;
+      tool_calls?: OpenRouterToolCall[];
+      reasoning_details?: unknown;
+    }
+  | { role: 'tool'; tool_call_id: string; content: string };
 type GeminiContent = { role: string; parts: GeminiPart[] };
 type GeminiToolResponse = {
   candidates?: Array<{ content?: GeminiContent }>;

@@ -1,6 +1,19 @@
 import type { TextProviderConfig } from '@bro/ai';
 
 export function textProviderConfig(kind: 'default' | 'script' = 'default') {
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  if (openRouterKey)
+    return {
+      provider: 'openrouter',
+      apiKey: openRouterKey,
+      model:
+        (kind === 'script' ? process.env.OPENROUTER_SCRIPT_MODEL : undefined) ||
+        process.env.OPENROUTER_MODEL ||
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
+      siteUrl:
+        process.env.OPENROUTER_SITE_URL || process.env.NEXT_PUBLIC_APP_URL,
+      appName: process.env.OPENROUTER_APP_NAME || 'Bro',
+    } satisfies TextProviderConfig;
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey)
     return {
@@ -22,7 +35,9 @@ export function textProviderConfig(kind: 'default' | 'script' = 'default') {
         'gpt-5.6-luna',
     } satisfies TextProviderConfig;
   throw Object.assign(
-    new Error('Text AI is not configured. Add GEMINI_API_KEY.'),
+    new Error(
+      'Text AI is not configured. Add OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY.'
+    ),
     { status: 503 }
   );
 }

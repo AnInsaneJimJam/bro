@@ -2,6 +2,7 @@ import { z } from 'zod';
 export * from './command';
 export * from './transcription';
 export * from './text-provider';
+export * from './openrouter';
 const id = z.string().uuid();
 const providers = z
   .array(z.enum(['youtube', 'instagram']))

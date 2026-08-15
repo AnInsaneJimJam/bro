@@ -66,14 +66,18 @@ export async function GET() {
         key: 'text-ai',
         label: 'Text AI',
         status:
-          process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY
+          process.env.OPENROUTER_API_KEY ||
+          process.env.GEMINI_API_KEY ||
+          process.env.OPENAI_API_KEY
             ? 'ready'
             : 'missing',
-        detail: process.env.GEMINI_API_KEY
-          ? 'Gemini is configured for niche, topics, scripts, comments, and chat.'
-          : process.env.OPENAI_API_KEY
-            ? 'OpenAI fallback is configured for niche, topics, scripts, comments, and chat.'
-            : 'Add a newly generated GEMINI_API_KEY to enable niche, topics, scripts, comments, and chat.',
+        detail: process.env.OPENROUTER_API_KEY
+          ? `OpenRouter ${process.env.OPENROUTER_MODEL || 'Nemotron'} is configured for niche, topics, scripts, comments, and chat.`
+          : process.env.GEMINI_API_KEY
+            ? 'Gemini is configured for niche, topics, scripts, comments, and chat.'
+            : process.env.OPENAI_API_KEY
+              ? 'OpenAI fallback is configured for niche, topics, scripts, comments, and chat.'
+              : 'Add OPENROUTER_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY to enable niche, topics, scripts, comments, and chat.',
       },
       {
         key: 'audio-commands',

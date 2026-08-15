@@ -11,7 +11,7 @@ Demo mode is visually labeled, never calls social platforms, and never reports a
 - `packages/db` — Drizzle schema, migrations, inherited RLS policies, typed access, optional demo seed.
 - `packages/core` — state machines, scheduling, authorization-safe validation, scoring, AES-256-GCM token encryption, redaction.
 - `packages/integrations` — official YouTube, Instagram, and feature-flagged Reddit adapters.
-- `packages/ai` — 18 strict application-tool schemas, Responses API loop, structured niche/script/opportunity/comment outputs.
+- `packages/ai` — 18 strict application-tool schemas, OpenRouter/Gemini/Responses tool loops, and structured niche/script/opportunity/comment outputs.
 - `packages/video` — MIME/metadata validation, cue segmentation/edit operations, ASS generation, shell-free FFmpeg/ffprobe execution.
 
 The model never receives OAuth tokens. Application routes validate ownership and policy; durable workers perform external side effects. Timestamps are stored in UTC while scheduling intent retains the user's IANA time zone.
@@ -25,7 +25,7 @@ pnpm install
 cp .env.example .env && pnpm dev
 ```
 
-Open `http://localhost:3000` and choose **Continue with labeled demo data**. Keep `NEXT_PUBLIC_DEMO_MODE=true`. Add `GEMINI_API_KEY` (or the optional OpenAI fallback) if you want microphone commands to use real English transcription; typed commands and the rest of the demo work without it.
+Open `http://localhost:3000` and choose **Continue with labeled demo data**. Keep `NEXT_PUBLIC_DEMO_MODE=true`. Add `OPENROUTER_API_KEY` for Nemotron-backed niche, topics, scripts, comments, and typed chat. Recorded microphone commands still require `GEMINI_API_KEY` or `OPENAI_API_KEY` because OpenRouter/Nemotron is text-only.
 
 Suggested three-minute walkthrough:
 
@@ -62,7 +62,8 @@ Open `http://localhost:3000`. For a platform-free demo, retain `NEXT_PUBLIC_DEMO
 
 Set `NEXT_PUBLIC_DEMO_MODE=false` and provide these values in `.env`. Never commit that file or paste secrets into the browser:
 
-- **Gemini (preferred text/chat/audio-command provider):** `GEMINI_API_KEY`. `GEMINI_TEXT_MODEL`, `GEMINI_SCRIPT_MODEL`, and `GEMINI_COMMAND_TRANSCRIPTION_MODEL` are configurable model names, not additional keys. Bro converts browser WebM recordings to WAV before sending short commands to Gemini; OpenAI remains an optional fallback and is still used for word-timestamp caption transcription when that later editing slice is enabled.
+- **OpenRouter (preferred text/chat provider):** `OPENROUTER_API_KEY`, with `OPENROUTER_MODEL` defaulting to `nvidia/nemotron-3-ultra-550b-a55b:free`. `OPENROUTER_SCRIPT_MODEL`, `OPENROUTER_SITE_URL`, and `OPENROUTER_APP_NAME` are optional. Bro uses Chat Completions tool calling and validates every structured result with Zod. Nemotron is text-only; microphone commands still use Gemini or OpenAI.
+- **Gemini (optional audio/text fallback):** `GEMINI_API_KEY`. `GEMINI_TEXT_MODEL`, `GEMINI_SCRIPT_MODEL`, and `GEMINI_COMMAND_TRANSCRIPTION_MODEL` are configurable model names, not additional keys. Bro converts browser WebM recordings to WAV before sending short commands to Gemini.
 - **Supabase:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY`, plus `DATABASE_URL` and `DATABASE_DIRECT_URL` for its Postgres database.
 - **Bro security:** `TOKEN_ENCRYPTION_KEY` and `OAUTH_STATE_SECRET`, which you generate yourself; these are not third-party API keys.
 - **YouTube:** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from a Google Cloud Web OAuth client. No separate YouTube API key is needed for Bro's owned-channel, comment, and upload flows.
@@ -121,7 +122,7 @@ Set `REDDIT_INTEGRATION_ENABLED=false` until the intended use is approved under 
 
 ### AI providers
 
-Set `GEMINI_API_KEY` for live typed chat, structured text generation, and recorded English command transcription. Gemini's audio generate-content path accepts short inline WAV/MP3/AAC/OGG/AIFF/FLAC input; Bro converts Chromium WebM recordings to WAV in the browser first. OpenAI is an optional fallback for text/audio; caption transcription remains behind `TranscriptionProvider` and requires a word-timestamp-capable provider when that later editing slice is enabled.
+Set `OPENROUTER_API_KEY` for live typed chat, structured text generation, niche inference, topic clustering, scripts, and comment analysis. Bro uses the OpenAI-compatible OpenRouter Chat Completions endpoint and validates model JSON before storing it. Set `GEMINI_API_KEY` or `OPENAI_API_KEY` separately for recorded English audio commands; caption transcription remains behind `TranscriptionProvider` and requires a word-timestamp-capable provider when that later editing slice is enabled.
 
 ## Deployment
 

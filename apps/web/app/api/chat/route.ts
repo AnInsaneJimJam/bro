@@ -7,6 +7,7 @@ import { executeDemoTool } from '@/lib/demo-tools';
 import { jsonError } from '@/lib/http';
 import {
   runGeminiToolLoop,
+  runOpenRouterToolLoop,
   runResponsesToolLoop,
   type ToolExecutor,
 } from '@bro/ai/responses-loop';
@@ -68,19 +69,29 @@ export async function POST(req: Request) {
           execute: () => executeToolThroughOwnedRoutes(req, name, validated),
         });
       };
-      const result = await (ai.provider === 'gemini'
-        ? runGeminiToolLoop({
-            apiKey: ai.apiKey,
-            model: ai.model,
-            message,
-            executor: execute,
-          })
-        : runResponsesToolLoop({
-            apiKey: ai.apiKey,
-            model: ai.model,
-            message,
-            executor: execute,
-          }));
+      const result =
+        ai.provider === 'gemini'
+          ? await runGeminiToolLoop({
+              apiKey: ai.apiKey,
+              model: ai.model,
+              message,
+              executor: execute,
+            })
+          : ai.provider === 'openrouter'
+            ? await runOpenRouterToolLoop({
+                apiKey: ai.apiKey,
+                model: ai.model,
+                message,
+                executor: execute,
+                siteUrl: ai.siteUrl,
+                appName: ai.appName,
+              })
+            : await runResponsesToolLoop({
+                apiKey: ai.apiKey,
+                model: ai.model,
+                message,
+                executor: execute,
+              });
       const confirmations = result.toolResults
         .map((item) => item.result)
         .filter(

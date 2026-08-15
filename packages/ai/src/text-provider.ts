@@ -1,11 +1,20 @@
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import type { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { zodToGeminiSchema } from './gemini-schema';
+import { createOpenRouterClient, parseJsonText } from './openrouter';
 
 export type TextProviderConfig =
   | { provider: 'gemini'; apiKey: string; model: string }
-  | { provider: 'openai'; apiKey: string; model: string };
+  | { provider: 'openai'; apiKey: string; model: string }
+  | {
+      provider: 'openrouter';
+      apiKey: string;
+      model: string;
+      siteUrl?: string;
+      appName?: string;
+    };
 
 export async function generateStructuredText<T>(
   config: TextProviderConfig,
@@ -36,6 +45,39 @@ export async function generateStructuredText<T>(
         }
       );
     return response.output_parsed;
+  }
+
+  if (config.provider === 'openrouter') {
+    const jsonSchema = zodToJsonSchema(input.schema, {
+      target: 'jsonSchema7',
+      $refStrategy: 'none',
+    });
+    const response = await createOpenRouterClient(
+      config
+    ).chat.completions.create({
+      model: config.model,
+      temperature: 0.2,
+      messages: [
+        {
+          role: 'system',
+          content: `${input.system}\n\nReturn only one valid JSON object matching this schema. Do not include markdown fences or commentary.\n${JSON.stringify(jsonSchema)}`,
+        },
+        { role: 'user', content: input.user },
+      ],
+    });
+    const text = response.choices[0]?.message?.content;
+    if (!text)
+      throw Object.assign(new Error('OpenRouter returned no structured text'), {
+        status: 502,
+      });
+    try {
+      return input.schema.parse(parseJsonText(text));
+    } catch (error) {
+      throw Object.assign(
+        new Error('OpenRouter returned invalid structured output'),
+        { status: 502, cause: error }
+      );
+    }
   }
 
   const response = await http(
