@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { and, desc, eq, gt } from 'drizzle-orm';
-import { decryptSecret, scoreTrend } from '@bro/core';
+import { scoreTrend } from '@bro/core';
 import { generateStructuredText, topicOpportunityOutput } from '@bro/ai';
 import {
   createDatabase,
-  getConnectionSecrets,
   nicheVersions,
+  platformConnections,
   topicOpportunities,
   trendRuns,
   trendSignals,
@@ -20,6 +20,7 @@ import {
 import { requireUser } from '@/lib/auth';
 import { demoStore } from '@/lib/demo-store';
 import { jsonError } from '@/lib/http';
+import { accessToken } from '@/lib/provider-token';
 import { textProviderConfig } from '@/lib/text-ai';
 
 export async function GET(request: Request) {
@@ -160,17 +161,22 @@ export async function POST(request: Request) {
           'omitted: feature flag disabled pending approved API access';
         continue;
       }
-      const connection = await getConnectionSecrets(
-        database.db,
-        user.id,
-        provider
-      );
+      const [connection] = await database.db
+        .select()
+        .from(platformConnections)
+        .where(
+          and(
+            eq(platformConnections.userId, user.id),
+            eq(platformConnections.provider, provider)
+          )
+        )
+        .limit(1);
       if (!connection) {
         coverage[provider] = 'omitted: not connected';
         continue;
       }
       const token = async () =>
-        decryptSecret(connection.accessToken, encryptionKey);
+        accessToken(database, connection, encryptionKey);
       const adapter =
         provider === 'youtube'
           ? new YouTubeAdapter(token)
