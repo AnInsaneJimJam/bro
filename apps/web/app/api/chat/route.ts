@@ -168,12 +168,23 @@ export async function POST(req: Request) {
       resolution.arguments
     ) as Record<string, unknown>;
     const result = await executeDemoTool(resolution.tool, args);
+    const demoAction =
+      resolution.tool === 'generate_short_script' &&
+      result &&
+      typeof result === 'object' &&
+      typeof (result as { id?: unknown }).id === 'string'
+        ? {
+            type: 'open_scripts' as const,
+            scriptId: (result as { id: string }).id,
+          }
+        : undefined;
     return NextResponse.json({
       type: 'tool_result',
       tool: resolution.tool,
       result,
       mode: 'demo',
       message: summarize(resolution.tool, result),
+      ...(demoAction ? { action: demoAction } : {}),
     });
   } catch (e) {
     return jsonError(e);
