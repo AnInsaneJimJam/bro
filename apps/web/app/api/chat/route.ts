@@ -218,54 +218,85 @@ async function loadChatWorkspace(
   database: ReturnType<typeof createDatabase>['db'],
   userId: string
 ): Promise<ChatWorkspace> {
-  const [niches, opportunities, recentScripts] = await Promise.all([
-    database
-      .select({
-        id: nicheVersions.id,
-        label: nicheVersions.label,
-        subNiches: nicheVersions.subNiches,
-        status: nicheVersions.status,
-      })
-      .from(nicheVersions)
-      .where(eq(nicheVersions.userId, userId))
-      .orderBy(desc(nicheVersions.updatedAt))
-      .limit(5),
-    database
-      .select({
-        id: topicOpportunities.id,
-        topic: topicOpportunities.topic,
-        angle: topicOpportunities.angle,
-        score: topicOpportunities.score,
-      })
-      .from(topicOpportunities)
-      .innerJoin(trendRuns, eq(topicOpportunities.runId, trendRuns.id))
-      .where(
-        and(
-          eq(trendRuns.userId, userId),
-          eq(trendRuns.status, 'ready'),
-          gt(trendRuns.expiresAt, new Date())
+  const [confirmedNiches, proposedNiches, opportunities, recentScripts] =
+    await Promise.all([
+      database
+        .select({
+          id: nicheVersions.id,
+          label: nicheVersions.label,
+          subNiches: nicheVersions.subNiches,
+        })
+        .from(nicheVersions)
+        .where(
+          and(
+            eq(nicheVersions.userId, userId),
+            eq(nicheVersions.status, 'confirmed')
+          )
         )
-      )
-      .orderBy(desc(topicOpportunities.score))
-      .limit(10),
-    database
-      .select({
-        id: scripts.id,
-        title: scripts.title,
-        duration: scripts.duration,
-      })
-      .from(scripts)
-      .where(eq(scripts.userId, userId))
-      .orderBy(desc(scripts.updatedAt))
-      .limit(10),
-  ]);
-  const toNiche = (value: (typeof niches)[number] | undefined) =>
+        .orderBy(desc(nicheVersions.updatedAt))
+        .limit(1),
+      database
+        .select({
+          id: nicheVersions.id,
+          label: nicheVersions.label,
+          subNiches: nicheVersions.subNiches,
+        })
+        .from(nicheVersions)
+        .where(
+          and(
+            eq(nicheVersions.userId, userId),
+            eq(nicheVersions.status, 'proposed')
+          )
+        )
+        .orderBy(desc(nicheVersions.updatedAt))
+        .limit(1),
+      database
+        .select({
+          id: topicOpportunities.id,
+          topic: topicOpportunities.topic,
+          angle: topicOpportunities.angle,
+          score: topicOpportunities.score,
+        })
+        .from(topicOpportunities)
+        .innerJoin(trendRuns, eq(topicOpportunities.runId, trendRuns.id))
+        .where(
+          and(
+            eq(trendRuns.userId, userId),
+            eq(trendRuns.status, 'ready'),
+            gt(trendRuns.expiresAt, new Date())
+          )
+        )
+        .orderBy(desc(topicOpportunities.score))
+        .limit(10),
+      database
+        .select({
+          id: scripts.id,
+          title: scripts.title,
+          duration: scripts.duration,
+        })
+        .from(scripts)
+        .where(eq(scripts.userId, userId))
+        .orderBy(desc(scripts.updatedAt))
+        .limit(10),
+    ]);
+  const toNiche = (
+    value:
+      | {
+          id: string;
+          label: string | null;
+          subNiches: unknown;
+        }
+      | undefined
+  ) =>
     value
       ? { id: value.id, label: value.label, subNiches: value.subNiches }
       : null;
+  const confirmedNiche = toNiche(confirmedNiches[0]);
   return {
-    confirmedNiche: toNiche(niches.find((item) => item.status === 'confirmed')),
-    proposedNiche: toNiche(niches.find((item) => item.status === 'proposed')),
+    confirmedNiche,
+    // Once a confirmed niche exists, stale proposals are not useful context
+    // and can make the model appear to “change” the creator's niche.
+    proposedNiche: confirmedNiche ? null : toNiche(proposedNiches[0]),
     topicOpportunities: opportunities,
     recentScripts,
   };
