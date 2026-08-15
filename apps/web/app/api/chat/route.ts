@@ -182,6 +182,17 @@ function chatActionSummary(result: {
       return `Script generated${title}. Open Scripts to review and edit it.`;
     }
     if (
+      item.name === 'infer_creator_niche' &&
+      typeof record.label === 'string'
+    ) {
+      const subNiches = Array.isArray(record.subNiches)
+        ? record.subNiches.filter(
+            (value): value is string => typeof value === 'string'
+          )
+        : [];
+      return `I found a proposed niche: ${record.label}${subNiches.length ? ` (${subNiches.join(', ')})` : ''}. Open Ideas or the niche review step to confirm or edit it before discovering topics.`;
+    }
+    if (
       item.name === 'discover_topic_opportunities' &&
       Array.isArray(record.items)
     )

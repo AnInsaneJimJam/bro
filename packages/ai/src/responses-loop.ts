@@ -174,12 +174,19 @@ export async function runOpenRouterToolLoop(input: {
         );
       throw error;
     }
-    const message = response.choices[0]?.message as OpenRouterMessage;
+    const choice = Array.isArray(response?.choices)
+      ? response.choices[0]
+      : undefined;
+    const message =
+      choice && typeof choice === 'object' && 'message' in choice
+        ? (choice.message as OpenRouterMessage)
+        : undefined;
     if (!message)
       throw Object.assign(
-        new Error('OpenRouter returned no assistant message'),
+        new Error('OpenRouter returned an invalid assistant response'),
         {
           status: 502,
+          code: 'AI_INVALID_RESPONSE',
         }
       );
     const calls = message.tool_calls || [];
@@ -225,6 +232,24 @@ export async function runOpenRouterToolLoop(input: {
         content: JSON.stringify(result),
       });
     }
+    // These tools already return the user-facing artifact. Avoid an extra
+    // model round just to paraphrase it; this also makes action commands
+    // reliable when a free model returns an incomplete follow-up response.
+    if (
+      calls.some((call) =>
+        [
+          'infer_creator_niche',
+          'discover_topic_opportunities',
+          'generate_short_script',
+        ].includes(call.function.name)
+      )
+    )
+      return {
+        responseId: response.id,
+        text: '',
+        toolCalls: round + 1,
+        toolResults,
+      };
   }
   throw new Error('Bro exceeded the maximum OpenRouter tool-call rounds');
 }
