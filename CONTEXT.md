@@ -31,6 +31,7 @@ Subtitle transcription, caption editing, and caption burn-in are deferred. Their
 
 Latest commits:
 
+- `0c5695e` — allow scripts from creator-supplied topics and retain chat follow-up context
 - `acaaf4e` — harden chat script generation and short topic-ID selection
 - `8bb24e5` — gate publishing by connection health (latest web deployment)
 - `161196f` — harden live video publishing retries (latest worker deployment)
@@ -111,6 +112,10 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 - Niche inference stores proposed versions, confidence, rationale, evidence, and insufficient-data state; a niche must be confirmed/edited before opportunity discovery.
 - Country/niche topic opportunities use time-bounded official signals and deterministic score components before AI synthesis.
 - Script generation/editing/versioning/duplicate/regenerate routes and UI exist.
+- Script generation accepts either a verified workspace opportunity or an
+  explicitly creator-supplied evergreen topic. Custom topics are stored with
+  no fabricated trend/evidence references, and the conversation history is
+  included so a duration/platform follow-up retains the original topic.
 - Bro Chat script requests now resolve the short opportunity IDs shown in chat
   (including a copied Unicode-ellipsis prefix) back to the full owned UUID.
   If OpenRouter returns a malformed successful response, script creation saves
