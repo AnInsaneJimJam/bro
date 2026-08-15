@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
+import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,14 +21,41 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
   }
   async function magicLink() {
     setBusy(true);
-    const response = await fetch('/api/auth/magic-link', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const data = await response.json();
-    setMessage(data.message || data.error);
-    setBusy(false);
+    setMessage('');
+    try {
+      const response = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+      setMessage(data.message || data.error || 'Unable to send the magic link.');
+    } catch {
+      setMessage('Unable to send the magic link. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function googleAuth() {
+    setBusy(true);
+    setMessage('');
+    try {
+      const { error } = await createSupabaseBrowserClient().auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/api/auth/callback?next=/onboarding`,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (error) throw error;
+    } catch (error) {
+      setBusy(false);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Google sign-in is not configured yet.'
+      );
+    }
   }
   return (
     <main className="login">
@@ -41,9 +69,31 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
           in one conversation.
         </h1>
         <p>
-          Sign in to Bro with email and password, or request a secure magic
-          link. Social-platform passwords are never requested or stored.
+          Sign in with Google, email and password, or a secure magic link.
+          Social-platform passwords are never requested or stored.
         </p>
+        {!demoMode && (
+          <>
+            <button
+              className="google-login"
+              type="button"
+              disabled={busy}
+              onClick={googleAuth}
+            >
+              <span className="google-mark" aria-hidden="true">
+                G
+              </span>
+              Continue with Google <ArrowRight />
+            </button>
+            <div
+              className="auth-choice-divider"
+              role="separator"
+              aria-label="Or use email authentication"
+            >
+              <span>OR</span>
+            </div>
+          </>
+        )}
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -101,7 +151,11 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
             Email me a magic link
           </button>
         </form>
-        {message && <div className="login-message">{message}</div>}
+        {message && (
+          <div className="login-message" role="status" aria-live="polite">
+            {message}
+          </div>
+        )}
         {demoMode && <a href="/onboarding">Continue with labeled demo data</a>}
       </div>
     </main>

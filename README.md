@@ -75,7 +75,7 @@ Redirect URIs, scopes, API/model versions, bucket names, limits, and worker sett
 ### Supabase setup
 
 1. Create private buckets named `bro-originals`, `bro-audio`, and `bro-renders` (or change the environment names).
-2. Configure email magic-link authentication and add `${NEXT_PUBLIC_APP_URL}/api/auth/callback` to allowed redirects.
+2. Configure email magic-link authentication, enable the Google provider, and add `${NEXT_PUBLIC_APP_URL}/api/auth/callback` to allowed redirects. For Google sign-in, create/configure a Google OAuth web client with Supabase's callback URL (`https://<project-ref>.supabase.co/auth/v1/callback`) in Google Cloud, then paste its client ID and secret into Supabase Auth → Providers → Google. This Google login identifies the Bro user; the separate YouTube connection still uses Bro's YouTube OAuth flow.
 3. Apply `packages/db/migrations` to the Supabase Postgres database. The RLS policies use `auth.uid()` and scope both direct and inherited child records.
 4. Put the anonymous key only in `NEXT_PUBLIC_SUPABASE_ANON_KEY`; keep the service-role key server/worker-only.
 5. Generate `TOKEN_ENCRYPTION_KEY` with `openssl rand -base64 32`. Rotate by adding a new key version and re-encrypting stored connections before retiring the old key.

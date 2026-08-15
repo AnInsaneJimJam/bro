@@ -86,6 +86,7 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 
 - Polished landing page with live/demo labeling and a clear YouTube/Instagram connection path.
 - Supabase email/password sign-up/sign-in and magic-link flow.
+- Supabase Google sign-in button with the same safe callback; Google sign-in identifies the Bro user but does not replace the separate YouTube connection OAuth.
 - OAuth callback for Bro authentication with safe `next` path validation.
 - Display name, searchable ISO country selector, country code/name, and IANA time-zone storage.
 - One connection per provider per Bro user through a database uniqueness constraint.
@@ -177,11 +178,13 @@ Use the hosted app for this test. Do not paste tokens or API keys into chat or b
 ### 1. Bro account
 
 - Open <https://web-production-d7f4c.up.railway.app>.
-- Create a Bro account with email/password or magic link.
+- Sign in with Google, or create a Bro account with email/password or magic link.
 - Confirm the email if Supabase requires it.
 - Sign in and verify that `/onboarding` opens.
 
 Expected: no demo label, no provider password request, and the landing page leads to authentication.
+
+For Google sign-in, enable the Google provider in Supabase Auth → Providers and configure the provider's OAuth client with `https://<project-ref>.supabase.co/auth/v1/callback`. This is separate from Bro's YouTube OAuth client and callback.
 
 ### 2. Profile and country
 
@@ -298,6 +301,7 @@ Never send access tokens, refresh tokens, client secrets, service-role keys, dat
 3. Configure a fresh `GEMINI_API_KEY` if AI niche/scripts/chat/audio commands are required, then manually test those paths.
 4. Resolve any provider-console callback, test-user, scope, quota, or account-eligibility issues exposed by those tests.
 5. Complete Google/Meta provider review and data-deletion/privacy setup before inviting users outside provider test accounts.
+6. Enable and manually test the Supabase Google provider using a Google OAuth client configured with Supabase's callback URL.
 
 ### Known code limitations
 
