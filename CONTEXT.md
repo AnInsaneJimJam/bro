@@ -31,6 +31,7 @@ Subtitle transcription, caption editing, and caption burn-in are deferred. Their
 
 Latest commits:
 
+- `acaaf4e` — harden chat script generation and short topic-ID selection
 - `8bb24e5` — gate publishing by connection health (latest web deployment)
 - `161196f` — harden live video publishing retries (latest worker deployment)
 - `55fb53c` — surface live connection sync errors
@@ -110,6 +111,11 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 - Niche inference stores proposed versions, confidence, rationale, evidence, and insufficient-data state; a niche must be confirmed/edited before opportunity discovery.
 - Country/niche topic opportunities use time-bounded official signals and deterministic score components before AI synthesis.
 - Script generation/editing/versioning/duplicate/regenerate routes and UI exist.
+- Bro Chat script requests now resolve the short opportunity IDs shown in chat
+  (including a copied Unicode-ellipsis prefix) back to the full owned UUID.
+  If OpenRouter returns a malformed successful response, script creation saves
+  the transparent editable deterministic draft instead of exposing a server
+  `choices[0]` crash.
 - Comment sync is restricted to owned posts; filters include provider/post/date/keyword.
 - Comment analysis is grounded in the selected stored sample and exposes sample size, sync time, approximate sentiment caveat, and representative references.
 - AI is provider-configurable. OpenRouter/Nemotron Chat Completions with strict Zod validation and function calling is preferred when `OPENROUTER_API_KEY` is present; Gemini REST and OpenAI remain optional fallbacks. Audio command transcription still uses Gemini/OpenAI.
