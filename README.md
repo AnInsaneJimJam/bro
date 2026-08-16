@@ -1,12 +1,20 @@
-# Bro
+<p align="center">
+  <img src=".github/logo.svg" width="56" alt="">
+</p>
 
-**A creator command center for solo YouTube Shorts and Instagram Reels publishers.**
+<h1 align="center">
+  <img src=".github/banner.png" width="300" alt="Bro">
+</h1>
 
-![Node](https://img.shields.io/badge/node-22-339933?logo=node.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js&logoColor=white)
-![pnpm](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)
-![Postgres](https://img.shields.io/badge/Postgres-16-4169E1?logo=postgresql&logoColor=white)
+<p align="center"><b>A creator command center for solo YouTube Shorts and Instagram Reels publishers.</b></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/node-22-339933?logo=node.js&logoColor=white" alt="Node 22">
+  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.8">
+  <img src="https://img.shields.io/badge/Next.js-15-black?logo=next.js&logoColor=white" alt="Next.js 15">
+  <img src="https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white" alt="pnpm 10">
+  <img src="https://img.shields.io/badge/Postgres-16-4169E1?logo=postgresql&logoColor=white" alt="Postgres 16">
+</p>
 
 Bro turns "I have a video" into "it's published" — one connected workspace for
 finding a topic, drafting a script, uploading or recording the clip, drafting
