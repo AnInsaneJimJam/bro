@@ -14,6 +14,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Trash2,
   Upload,
   Video as VideoIcon,
   Youtube,
@@ -1568,7 +1569,12 @@ function MyVideos() {
   };
   const [projects, setProjects] = useState<Project[]>([]),
     [previews, setPreviews] = useState<Record<string, string>>({}),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [deleteError, setDeleteError] = useState<{
+      id: string;
+      text: string;
+    } | null>(null),
+    { isBusy, run } = useBusy();
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1596,6 +1602,30 @@ function MyVideos() {
   function scheduleThis(projectId: string) {
     sessionStorage.setItem(FOCUS_PROJECT_KEY, projectId);
     location.hash = 'Calendar';
+  }
+  function deleteVideo(projectId: string) {
+    if (
+      !confirm(
+        'Delete this video? The upload and any drafted captions are removed permanently. This cannot be undone.'
+      )
+    )
+      return;
+    void run(projectId, () => deleteVideoProject(projectId));
+  }
+  async function deleteVideoProject(projectId: string) {
+    setDeleteError(null);
+    const response = await fetch(`/api/videos/${projectId}`, {
+        method: 'DELETE',
+      }),
+      data = await response.json();
+    if (!response.ok) {
+      setDeleteError({
+        id: projectId,
+        text: data.error || 'Bro could not delete this video.',
+      });
+      return;
+    }
+    setProjects((current) => current.filter((item) => item.id !== projectId));
   }
   return (
     <Surface
@@ -1650,13 +1680,25 @@ function MyVideos() {
                     </p>
                   )}
                 </div>
-                {project.state === 'ready' && (
-                  <div className="video-card-actions">
+                <div className="video-card-actions">
+                  {project.state === 'ready' && (
                     <button onClick={() => scheduleThis(project.id)}>
                       <CalendarDays />
                       Schedule
                     </button>
-                  </div>
+                  )}
+                  <button
+                    className="video-card-delete"
+                    onClick={() => deleteVideo(project.id)}
+                    disabled={isBusy(project.id)}
+                    data-busy={isBusy(project.id)}
+                    aria-label="Delete video"
+                  >
+                    <Trash2 />
+                  </button>
+                </div>
+                {deleteError?.id === project.id && (
+                  <p className="video-card-delete-error">{deleteError.text}</p>
                 )}
               </article>
             );

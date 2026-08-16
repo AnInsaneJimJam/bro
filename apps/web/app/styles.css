@@ -2601,10 +2601,12 @@ header p {
   margin-top: 2px;
 }
 .video-card-actions {
+  display: flex;
+  gap: 8px;
   padding: 0 14px 14px;
 }
 .video-card-actions button {
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2619,6 +2621,18 @@ header p {
 .video-card-actions button svg {
   width: 13px;
   height: 13px;
+}
+.video-card-delete {
+  flex: 0 0 auto;
+  color: var(--warn);
+  width: 36px;
+  padding: 9px !important;
+}
+.video-card-delete-error {
+  margin: 0 14px 14px;
+  color: var(--warn);
+  font-size: 11px;
+  line-height: 1.5;
 }
 .filter-row {
   display: flex;
