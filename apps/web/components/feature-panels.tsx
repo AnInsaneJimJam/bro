@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  Film,
   Instagram,
   Plus,
   RefreshCw,
@@ -57,6 +58,11 @@ type ChatMessage = {
   content: string;
 };
 /**
+ * Set by "Schedule" on My Videos so Calendar opens with that project
+ * pre-selected instead of defaulting to the most recently updated one.
+ */
+const FOCUS_PROJECT_KEY = 'bro:focusProjectId';
+/**
  * Tracks which named action is in flight so a button can show a spinner
  * (via data-busy) instead of leaving a click with no visible response.
  */
@@ -88,6 +94,7 @@ export function FeaturePanel({
   if (active === 'Ideas') return <Ideas />;
   if (active === 'Scripts') return <Scripts focusScriptId={focusScriptId} />;
   if (active === 'Videos') return <Videos />;
+  if (active === 'My Videos') return <MyVideos />;
   if (active === 'Calendar') return <Calendar />;
   if (active === 'Comments') return <Comments />;
   if (active === 'Connections') return <Connections />;
@@ -1072,6 +1079,127 @@ function Videos() {
     </Surface>
   );
 }
+const videoStateLabels: Record<string, string> = {
+  queued: 'Queued',
+  uploaded: 'Uploaded',
+  validating: 'Validating',
+  transcribing: 'Reading transcript',
+  captions_ready: 'Captions ready',
+  ready: 'Ready',
+  failed: 'Needs attention',
+};
+function MyVideos() {
+  type Project = {
+    id: string;
+    state: string;
+    demo?: boolean;
+    updatedAt?: string;
+    metadata?: {
+      filename?: string;
+      aiMetadata?: VideoDraftMetadata;
+      metadataNotice?: string;
+    };
+  };
+  const [projects, setProjects] = useState<Project[]>([]),
+    [previews, setPreviews] = useState<Record<string, string>>({}),
+    [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const response = await fetch('/api/videos?limit=50'),
+        data = await response.json();
+      if (cancelled) return;
+      const list = Array.isArray(data) ? (data as Project[]) : [];
+      setProjects(list);
+      setLoading(false);
+      if (list[0]?.demo) return;
+      const entries = await Promise.all(
+        list.map(async (project) => {
+          const mediaResponse = await fetch(`/api/videos/${project.id}/media`),
+            media = await mediaResponse.json();
+          return [project.id, mediaResponse.ok ? media.url : ''] as const;
+        })
+      );
+      if (!cancelled) setPreviews(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  function scheduleThis(projectId: string) {
+    sessionStorage.setItem(FOCUS_PROJECT_KEY, projectId);
+    location.hash = 'Calendar';
+  }
+  return (
+    <Surface
+      title="My Videos"
+      subtitle="Every upload, with the title, description, and caption Bro drafted for it."
+    >
+      {loading ? (
+        <p>Loading your videos…</p>
+      ) : projects.length === 0 ? (
+        <div className="video-library-empty">
+          <Film />
+          <p>
+            No videos yet. Upload one in Videos and Bro will draft its post
+            fields automatically.
+          </p>
+        </div>
+      ) : (
+        <div className="video-library">
+          {projects.map((project) => {
+            const draft = project.metadata?.aiMetadata,
+              filename = project.metadata?.filename || project.id,
+              preview = previews[project.id];
+            return (
+              <article key={project.id} className="video-card">
+                <div className="video-card-thumb">
+                  {preview ? (
+                    <video src={preview} muted preload="metadata" />
+                  ) : (
+                    <Film />
+                  )}
+                </div>
+                <div className="video-card-body">
+                  <div className="video-card-head">
+                    <strong>{draft?.title || filename}</strong>
+                    <span
+                      className={`video-card-state ${project.state === 'failed' ? 'error' : ''}`}
+                    >
+                      {videoStateLabels[project.state] || project.state}
+                    </span>
+                  </div>
+                  {draft ? (
+                    <>
+                      <p className="video-card-desc">{draft.description}</p>
+                      <p className="video-card-caption">
+                        <Instagram /> {draft.instagramCaption}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="video-card-desc muted">
+                      {project.metadata?.metadataNotice ||
+                        'No draft yet. Bro drafts post fields automatically after a video validates.'}
+                    </p>
+                  )}
+                </div>
+                {project.state === 'ready' && (
+                  <div className="video-card-actions">
+                    <button onClick={() => scheduleThis(project.id)}>
+                      <CalendarDays />
+                      Schedule
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </Surface>
+  );
+}
 function Calendar() {
   type Job = {
     id: string;
@@ -1089,7 +1217,10 @@ function Calendar() {
     id: string;
     state: string;
     demo?: boolean;
-    metadata?: { filename?: string };
+    metadata?: {
+      filename?: string;
+      aiMetadata?: VideoDraftMetadata;
+    };
   };
   const now = new Date(),
     initial = new Date(now.getTime() + 864e5);
@@ -1115,7 +1246,8 @@ function Calendar() {
     >('unlisted'),
     [instagramCaption, setInstagramCaption] = useState(''),
     [message, setMessage] = useState(''),
-    [scheduling, setScheduling] = useState(false);
+    [scheduling, setScheduling] = useState(false),
+    prefilledProjectId = useRef('');
   async function load() {
     const [start, end] = [
         new Date(cursor.getFullYear(), cursor.getMonth(), 1),
@@ -1136,12 +1268,32 @@ function Calendar() {
       ? videoData.filter((item: Project) => item.state === 'ready')
       : [];
     setProjects(ready);
-    setProjectId((value) => value || ready[0]?.id || '');
+    const focusId = sessionStorage.getItem(FOCUS_PROJECT_KEY);
+    if (focusId && ready.some((project) => project.id === focusId)) {
+      sessionStorage.removeItem(FOCUS_PROJECT_KEY);
+      setProjectId(focusId);
+    } else setProjectId((value) => value || ready[0]?.id || '');
     if (profile.timeZone) setZone(profile.timeZone);
   }
   useEffect(() => {
     load();
   }, [cursor]);
+  // Prefill from the video's already-generated bundle so a creator never
+  // retypes a title/description/caption Bro drafted during upload. Only
+  // runs once per project selection, so editing a field mid-session and
+  // navigating months doesn't clobber it.
+  useEffect(() => {
+    if (!projectId || prefilledProjectId.current === projectId) return;
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    prefilledProjectId.current = projectId;
+    const draft = project.metadata?.aiMetadata;
+    if (draft) {
+      setYoutubeTitle(draft.title);
+      setYoutubeDescription(draft.description);
+      setInstagramCaption(draft.instagramCaption);
+    }
+  }, [projectId, projects]);
   async function schedule() {
     setScheduling(true);
     try {
