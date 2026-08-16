@@ -175,30 +175,18 @@ served through short-lived signed URLs. Disconnecting a provider revokes its
 token where the provider supports it; deleting an account revokes tokens,
 removes original/audio/rendered media, and deletes the user's data graph.
 
-## Project status
+## Coming features
 
-> [!IMPORTANT]
-> Real OAuth, owned-content/comment sync, resumable YouTube upload, Instagram
-> Reels publishing, durable scheduling, and FFmpeg caption rendering are all
-> implemented and covered by automated tests — but **not yet verified against
-> a real YouTube channel or Instagram account**, since that requires
-> human-supplied credentials and, for Instagram, an eligible Creator/Business
-> account plus Meta App Review.
-
-Known gaps:
-
-- Caption timing comes from the transcription provider's word alignment and
-  isn't yet independently editable — only cue text can be adjusted before
-  burn-in.
-- Instagram's long-lived-token refresh strategy needs revalidation against
-  the exact Meta product/API version selected before public launch.
-- A credential-backed Supabase/RLS integration test with two real users is
-  still missing; route-level ownership checks and RLS migrations exist.
-
-### Roadmap
-
-1. Cue timing/style controls on top of the live text-only caption editor.
-2. Richer vertical editing — trim, reframe, B-roll, music.
-3. Evaluation fixtures for script/niche/comment output quality.
-4. Suggested posting-time analytics, with manual scheduling staying authoritative.
-5. Team/collaboration support once the solo workflow is stable.
+- **Automatic comment replies** — draft and post on-brand responses to
+  incoming comments, grounded in the same comment data Bro already
+  analyzes, without reviewing every thread by hand.
+- **Expanded video editing** — trim, reframe, and layer in B-roll and music
+  directly in Bro, building on the existing caption pipeline.
+- **Automatic scheduling** — let Bro propose publish times from a channel's
+  own performance history, with manual scheduling remaining available.
+- **Style preferences** — save a creator's preferred tone, formatting, and
+  branding once and apply it to every generated script, caption, and
+  drafted reply.
+- **In-depth niche analysis with live web access** — ground niche and topic
+  recommendations in real-time web research alongside synced owned-account
+  history, rather than owned history alone.
