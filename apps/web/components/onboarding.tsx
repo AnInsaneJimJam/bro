@@ -306,7 +306,12 @@ export function Onboarding({
             </p>
             <label>
               Display name
-              <input value={name} onChange={(e) => setName(e.target.value)} />
+              <input
+                name="name"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </label>
             <label>
               Country
@@ -324,7 +329,7 @@ export function Onboarding({
                   );
                   if (selected) setCountry(selected);
                 }}
-                placeholder="Search country name or ISO code"
+                placeholder="Search country name or ISO code…"
                 autoComplete="country-name"
               />
               <datalist id="bro-country-options">

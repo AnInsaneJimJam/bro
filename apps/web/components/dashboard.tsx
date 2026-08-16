@@ -643,8 +643,8 @@ export function Dashboard() {
         </div>
       </section>
       {notice && (
-        <div className="toast">
-          <CheckCircle2 />
+        <div className="toast" role="status" aria-live="polite">
+          <CheckCircle2 aria-hidden="true" />
           {notice}
         </div>
       )}

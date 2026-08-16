@@ -120,6 +120,8 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
             Email address
             <input
               type="email"
+              name="email"
+              autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -130,6 +132,7 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
             Password
             <input
               type="password"
+              name="password"
               required
               minLength={8}
               value={password}

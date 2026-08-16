@@ -2345,7 +2345,7 @@ function Comments() {
         <input
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
-          placeholder="Filter by keyword"
+          placeholder="Filter by keyword…"
         />
         <input
           type="date"
