@@ -1094,8 +1094,7 @@ function Calendar() {
   const now = new Date(),
     initial = new Date(now.getTime() + 864e5);
   initial.setHours(19, 30, 0, 0);
-  const [view, setView] = useState<'month' | 'week'>('month'),
-    [cursor, setCursor] = useState(
+  const [cursor, setCursor] = useState(
       new Date(now.getFullYear(), now.getMonth(), 1)
     ),
     [selected, setSelected] = useState(localInput(initial)),
@@ -1220,216 +1219,314 @@ function Calendar() {
     load();
   }
   async function cancel(jobId: string) {
+    if (!confirm('Cancel this scheduled post? This cannot be undone.')) return;
     const response = await fetch(`/api/publish/${jobId}`, { method: 'DELETE' }),
       data = await response.json();
     setMessage(response.ok ? 'Scheduled post cancelled.' : data.error);
     load();
   }
-  const days =
-      view === 'month'
-        ? new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
-        : 7,
-    month = cursor.toLocaleString([], { month: 'long', year: 'numeric' });
+  const today = new Date(),
+    todayKey = dateKey(today),
+    monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1),
+    daysInMonth = new Date(
+      cursor.getFullYear(),
+      cursor.getMonth() + 1,
+      0
+    ).getDate(),
+    leadingBlanks = monthStart.getDay(),
+    month = cursor.toLocaleString([], { month: 'long', year: 'numeric' }),
+    jobsByDay = new Map<string, Job[]>();
+  for (const job of jobs) {
+    const key =
+      job.scheduledLocalDate ||
+      new Date(job.scheduledAt).toLocaleDateString('en-CA', { timeZone: zone });
+    jobsByDay.set(key, [...(jobsByDay.get(key) || []), job]);
+  }
   return (
     <Surface
       title="Calendar"
-      subtitle={`Manual slots shown in ${zone}. Bro stores execution times in UTC.`}
-      action={
-        <div className="toggle">
-          <button
-            className={view === 'month' ? 'on' : ''}
-            onClick={() => setView('month')}
-          >
-            Month
-          </button>
-          <button
-            className={view === 'week' ? 'on' : ''}
-            onClick={() => setView('week')}
-          >
-            Week
-          </button>
-        </div>
-      }
+      subtitle={`Times shown in ${zone}. Bro stores execution times in UTC.`}
     >
-      <div className="calendar-toolbar">
-        <button
-          onClick={() =>
-            setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))
-          }
-        >
-          <ChevronLeft />
-        </button>
-        <h3>{month}</h3>
-        <button
-          onClick={() =>
-            setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
-          }
-        >
-          <ChevronRight />
-        </button>
-      </div>
-      <div className="calendar-grid">
-        {[...Array(days)].map((_, i) => {
-          const day = i + 1,
-            dayJobs = jobs.filter(
-              (job) =>
-                (job.scheduledLocalDate ||
-                  new Date(job.scheduledAt).toLocaleDateString('en-CA', {
-                    timeZone: zone,
-                  })) ===
-                `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-            );
-          return (
+      <div className="calendar-layout">
+        <section className="calendar-panel">
+          <div className="calendar-toolbar">
             <button
-              key={day}
-              onClick={() => {
-                const date = new Date(
-                  cursor.getFullYear(),
-                  cursor.getMonth(),
-                  day,
-                  19,
-                  30
-                );
-                setSelected(localInput(date));
-              }}
-            >
-              <span>{day}</span>
-              {dayJobs.map((job) => (
-                <b
-                  key={job.id}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (job.state === 'scheduled') cancel(job.id);
-                  }}
-                >
-                  {new Date(job.scheduledAt).toLocaleTimeString([], {
-                    timeZone: zone,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}{' '}
-                  · {job.state}
-                  <small className="calendar-destinations">
-                    {(job.destinations || []).map((destination) => (
-                      <i key={`${job.id}-${destination.provider}`}>
-                        {destination.provider === 'youtube' ? (
-                          <Youtube />
-                        ) : (
-                          <Instagram />
-                        )}
-                        {destination.state}
-                      </i>
-                    ))}
-                  </small>
-                </b>
-              ))}
-            </button>
-          );
-        })}
-      </div>
-      <div className="slot-editor">
-        <CalendarDays />
-        <label>
-          Manual future slot
-          <input
-            type="datetime-local"
-            value={selected}
-            min={localInput(new Date())}
-            onChange={(e) => setSelected(e.target.value)}
-          />
-        </label>
-        <div>
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-          >
-            <option value="">Choose a ready video</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.metadata?.filename || project.id}
-              </option>
-            ))}
-          </select>
-          <label>
-            <input
-              type="checkbox"
-              checked={destinations.youtube}
-              onChange={(e) =>
-                setDestinations({ ...destinations, youtube: e.target.checked })
-              }
-            />{' '}
-            YouTube
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={destinations.instagram}
-              onChange={(e) =>
-                setDestinations({
-                  ...destinations,
-                  instagram: e.target.checked,
-                })
-              }
-            />{' '}
-            Instagram
-          </label>
-        </div>
-        {destinations.youtube && (
-          <label>
-            YouTube title
-            <input
-              value={youtubeTitle}
-              maxLength={100}
-              onChange={(event) => setYoutubeTitle(event.target.value)}
-              placeholder="Title for your Short"
-            />
-          </label>
-        )}
-        {destinations.youtube && (
-          <label>
-            YouTube description
-            <textarea
-              value={youtubeDescription}
-              onChange={(event) => setYoutubeDescription(event.target.value)}
-              placeholder="Description and hashtags"
-            />
-          </label>
-        )}
-        {destinations.youtube && (
-          <label>
-            YouTube visibility
-            <select
-              value={youtubeVisibility}
-              onChange={(event) =>
-                setYoutubeVisibility(
-                  event.target.value as 'public' | 'unlisted' | 'private'
+              aria-label="Previous month"
+              onClick={() =>
+                setCursor(
+                  new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1)
                 )
               }
             >
-              <option value="unlisted">
-                Unlisted (recommended for testing)
-              </option>
-              <option value="private">Private</option>
-              <option value="public">Public</option>
-            </select>
-          </label>
-        )}
-        {destinations.instagram && (
-          <label>
-            Instagram caption
-            <textarea
-              value={instagramCaption}
-              onChange={(event) => setInstagramCaption(event.target.value)}
-              placeholder="Caption and hashtags"
-            />
-          </label>
-        )}
-        <button onClick={schedule} disabled={scheduling} data-busy={scheduling}>
-          Review schedule
-        </button>
+              <ChevronLeft />
+            </button>
+            <h3>{month}</h3>
+            <button
+              aria-label="Next month"
+              onClick={() =>
+                setCursor(
+                  new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+                )
+              }
+            >
+              <ChevronRight />
+            </button>
+            <button
+              className="calendar-today"
+              onClick={() =>
+                setCursor(new Date(today.getFullYear(), today.getMonth(), 1))
+              }
+            >
+              Today
+            </button>
+          </div>
+          <div className="calendar-weekdays">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+          <div className="calendar-grid">
+            {[...Array(leadingBlanks)].map((_, i) => (
+              <div key={`blank-${i}`} className="calendar-cell empty" />
+            ))}
+            {[...Array(daysInMonth)].map((_, i) => {
+              const day = i + 1,
+                key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+                dayJobs = jobsByDay.get(key) || [],
+                isToday = key === todayKey,
+                isPast = key < todayKey;
+              return (
+                <div
+                  key={day}
+                  role="button"
+                  tabIndex={isPast ? -1 : 0}
+                  aria-disabled={isPast}
+                  aria-current={isToday ? 'date' : undefined}
+                  className={[
+                    'calendar-cell',
+                    isToday ? 'today' : '',
+                    isPast ? 'past' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={() => {
+                    if (isPast) return;
+                    const date = new Date(
+                      cursor.getFullYear(),
+                      cursor.getMonth(),
+                      day,
+                      19,
+                      30
+                    );
+                    setSelected(localInput(date));
+                  }}
+                  onKeyDown={(event) => {
+                    if (isPast) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      const date = new Date(
+                        cursor.getFullYear(),
+                        cursor.getMonth(),
+                        day,
+                        19,
+                        30
+                      );
+                      setSelected(localInput(date));
+                    }
+                  }}
+                >
+                  <span className="calendar-daynum">{day}</span>
+                  <div className="calendar-jobs">
+                    {dayJobs.slice(0, 2).map((job) => (
+                      <button
+                        key={job.id}
+                        type="button"
+                        className={`calendar-job ${jobStateClass(job.state)}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (job.state === 'scheduled') cancel(job.id);
+                        }}
+                        title={
+                          job.state === 'scheduled'
+                            ? 'Click to cancel this scheduled post'
+                            : job.state
+                        }
+                      >
+                        <span className="calendar-job-time">
+                          {new Date(job.scheduledAt).toLocaleTimeString([], {
+                            timeZone: zone,
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <span className="calendar-job-icons">
+                          {(job.destinations || []).map((destination) => (
+                            <i key={`${job.id}-${destination.provider}`}>
+                              {destination.provider === 'youtube' ? (
+                                <Youtube />
+                              ) : (
+                                <Instagram />
+                              )}
+                            </i>
+                          ))}
+                        </span>
+                      </button>
+                    ))}
+                    {dayJobs.length > 2 && (
+                      <span className="calendar-job-more">
+                        +{dayJobs.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+        <section className="post-editor calendar-schedule-card">
+          <header className="post-editor-header">
+            <div>
+              <strong>Schedule a post</strong>
+              <span>Pick a day on the calendar, or set a time below</span>
+            </div>
+          </header>
+          <div className="post-fields">
+            <label>
+              Video
+              <select
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+              >
+                <option value="">Choose a ready video</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.metadata?.filename || project.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="calendar-slot-label">
+                <CalendarDays /> Date &amp; time
+              </span>
+              <input
+                type="datetime-local"
+                value={selected}
+                min={localInput(new Date())}
+                onChange={(e) => setSelected(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="destination-card">
+            <label className="destination-toggle">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={destinations.youtube}
+                  onChange={(e) =>
+                    setDestinations({
+                      ...destinations,
+                      youtube: e.target.checked,
+                    })
+                  }
+                />
+                <b>YouTube Shorts</b>
+              </span>
+            </label>
+            {destinations.youtube && (
+              <div className="post-fields">
+                <label>
+                  Title
+                  <input
+                    value={youtubeTitle}
+                    maxLength={100}
+                    onChange={(event) => setYoutubeTitle(event.target.value)}
+                    placeholder="Title for your Short"
+                  />
+                  <small>{youtubeTitle.length}/100</small>
+                </label>
+                <label>
+                  Description
+                  <textarea
+                    value={youtubeDescription}
+                    onChange={(event) =>
+                      setYoutubeDescription(event.target.value)
+                    }
+                    placeholder="Description and hashtags"
+                  />
+                </label>
+                <label>
+                  Visibility
+                  <select
+                    value={youtubeVisibility}
+                    onChange={(event) =>
+                      setYoutubeVisibility(
+                        event.target.value as 'public' | 'unlisted' | 'private'
+                      )
+                    }
+                  >
+                    <option value="unlisted">
+                      Unlisted (recommended for testing)
+                    </option>
+                    <option value="private">Private</option>
+                    <option value="public">Public</option>
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="destination-card">
+            <label className="destination-toggle">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={destinations.instagram}
+                  onChange={(e) =>
+                    setDestinations({
+                      ...destinations,
+                      instagram: e.target.checked,
+                    })
+                  }
+                />
+                <b>Instagram Reels</b>
+              </span>
+            </label>
+            {destinations.instagram && (
+              <label className="post-fields">
+                Caption
+                <textarea
+                  value={instagramCaption}
+                  onChange={(event) => setInstagramCaption(event.target.value)}
+                  placeholder="Caption and hashtags"
+                />
+              </label>
+            )}
+          </div>
+          <div className="post-editor-footer">
+            <button
+              className="primary-small"
+              onClick={schedule}
+              disabled={scheduling}
+              data-busy={scheduling}
+            >
+              Review schedule
+            </button>
+            {message && <small>{message}</small>}
+          </div>
+        </section>
       </div>
-      {message && <small>{message}</small>}
     </Surface>
   );
+}
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+function jobStateClass(state: string) {
+  if (state.startsWith('published')) return 'is-published';
+  if (state.startsWith('failed')) return 'is-failed';
+  if (state.startsWith('processing') || state.startsWith('uploading'))
+    return 'is-processing';
+  return 'is-scheduled';
 }
 function localInput(date: Date) {
   const offset = date.getTimezoneOffset();
