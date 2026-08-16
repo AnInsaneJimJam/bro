@@ -7,6 +7,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import {
   GeminiCommandTranscriptionProvider,
   OpenAITranscriptionProvider,
+  createGroqTranscriptionClient,
 } from '@bro/ai';
 import {
   captionCues,
@@ -378,6 +379,15 @@ async function transcribeVideoAudio(audio: Buffer, duration: number) {
       transcript = await transcriber.transcribeWithWordTimestamps(file);
     return { ...transcript, provider: 'openai' };
   }
+  if (process.env.GROQ_API_KEY) {
+    const transcriber = new OpenAITranscriptionProvider(
+        createGroqTranscriptionClient(process.env.GROQ_API_KEY),
+        process.env.GROQ_COMMAND_TRANSCRIPTION_MODEL || 'whisper-large-v3-turbo',
+        process.env.GROQ_CAPTION_TRANSCRIPTION_MODEL || 'whisper-large-v3'
+      ),
+      transcript = await transcriber.transcribeWithWordTimestamps(file);
+    return { ...transcript, provider: 'groq' };
+  }
   if (process.env.GEMINI_API_KEY) {
     const transcriber = new GeminiCommandTranscriptionProvider(
         process.env.GEMINI_API_KEY,
@@ -393,7 +403,7 @@ async function transcribeVideoAudio(audio: Buffer, duration: number) {
     };
   }
   throw new Error(
-    'Video text drafting requires OPENAI_API_KEY or GEMINI_API_KEY on the worker.'
+    'Video text drafting requires GROQ_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY on the worker.'
   );
 }
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { GeminiCommandTranscriptionProvider } from './transcription';
+import {
+  GeminiCommandTranscriptionProvider,
+  createGroqTranscriptionClient,
+} from './transcription';
 
 describe('Gemini command transcription', () => {
   it('sends short audio as inline data and returns only the transcript', async () => {
@@ -45,5 +48,19 @@ describe('Gemini command transcription', () => {
     await expect(provider.transcribeCommand(large)).rejects.toMatchObject({
       status: 413,
     });
+  });
+});
+
+describe('Groq transcription client', () => {
+  it('targets Groq’s OpenAI-compatible endpoint and honors an override', () => {
+    delete process.env.GROQ_BASE_URL;
+    expect(createGroqTranscriptionClient('groq-key').baseURL).toBe(
+      'https://api.groq.com/openai/v1'
+    );
+    process.env.GROQ_BASE_URL = 'https://proxy.example/v1';
+    expect(createGroqTranscriptionClient('groq-key').baseURL).toBe(
+      'https://proxy.example/v1'
+    );
+    delete process.env.GROQ_BASE_URL;
   });
 });

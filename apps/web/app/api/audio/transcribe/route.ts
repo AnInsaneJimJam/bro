@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import {
   GeminiCommandTranscriptionProvider,
   OpenAITranscriptionProvider,
+  createGroqTranscriptionClient,
 } from '@bro/ai';
 import { requireUser } from '@/lib/auth';
 import { enforceRateLimit } from '@/lib/rate-limit';
@@ -27,8 +28,9 @@ export async function POST(req: Request) {
     validateCommandAudio(file);
     const geminiKey = process.env.GEMINI_API_KEY,
       openAiKey = process.env.OPENAI_API_KEY,
+      groqKey = process.env.GROQ_API_KEY,
       mimeType = file.type.toLowerCase().split(';', 1)[0]?.trim();
-    let text: string, provider: 'gemini' | 'openai';
+    let text: string, provider: 'gemini' | 'openai' | 'groq';
     if (geminiKey && geminiAudioTypes.has(mimeType || '')) {
       const transcriber = new GeminiCommandTranscriptionProvider(
         geminiKey,
@@ -45,6 +47,13 @@ export async function POST(req: Request) {
       );
       text = await transcriber.transcribeCommand(file);
       provider = 'openai';
+    } else if (groqKey) {
+      const transcriber = new OpenAITranscriptionProvider(
+        createGroqTranscriptionClient(groqKey),
+        process.env.GROQ_COMMAND_TRANSCRIPTION_MODEL || 'whisper-large-v3-turbo'
+      );
+      text = await transcriber.transcribeCommand(file);
+      provider = 'groq';
     } else if (geminiKey)
       throw Object.assign(
         new Error(
@@ -55,7 +64,7 @@ export async function POST(req: Request) {
     else
       throw Object.assign(
         new Error(
-          'Audio transcription is not configured. Add GEMINI_API_KEY or OPENAI_API_KEY to use recorded commands.'
+          'Audio transcription is not configured. Add GROQ_API_KEY, GEMINI_API_KEY, or OPENAI_API_KEY to use recorded commands.'
         ),
         { status: 503 }
       );

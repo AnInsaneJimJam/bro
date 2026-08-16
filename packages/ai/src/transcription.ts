@@ -9,6 +9,16 @@ export type TimedTranscript = {
     confidence?: number;
   }>;
 };
+/**
+ * Groq serves Whisper over an OpenAI-compatible transcription endpoint, so the
+ * OpenAI provider above works unchanged against it once the base URL is moved.
+ */
+export function createGroqTranscriptionClient(apiKey: string) {
+  return new OpenAI({
+    apiKey,
+    baseURL: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+  });
+}
 export interface TranscriptionProvider {
   transcribeCommand(audio: File): Promise<string>;
   transcribeWithWordTimestamps(audio: File): Promise<TimedTranscript>;
