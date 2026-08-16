@@ -659,8 +659,19 @@ function Videos() {
       !draft
     ) {
       await draftMetadata(targetProjectId);
-    } else if (nextState === 'ready' && !statusMetadata.hasTranscript) {
+    } else if (
+      nextState === 'ready' &&
+      !statusMetadata.hasTranscript &&
+      statusMetadata.transcriptionStatus !== 'failed'
+    ) {
       await startTranscription(targetProjectId);
+    } else if (statusMetadata.transcriptionStatus === 'failed') {
+      // Nothing else will arrive for this project, so stop the status poll.
+      setMetadataReady(true);
+      setStatus(
+        statusMetadata.notice ||
+          'Bro could not read the spoken text. Write the post fields yourself and publish.'
+      );
     } else if (nextState !== 'ready' || !draft) {
       setStatus(`Project state: ${nextState}`);
     } else if (!statusMetadata.notice) {

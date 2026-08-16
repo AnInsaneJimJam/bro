@@ -362,10 +362,42 @@ async function markDomainFailure(
 ) {
   const database = createDatabase();
   try {
-    if (
-      (name === 'validate-video' ||
-        name === 'transcribe-video' ||
-        name === 'render-video') &&
+    // A transcript only drafts post metadata; it is not required to publish.
+    // Keep a validated project publishable and record why drafting stopped.
+    if (name === 'transcribe-video' && data.projectId) {
+      const [project] = await database.db
+        .select({ metadata: videoProjects.metadata })
+        .from(videoProjects)
+        .where(
+          and(
+            eq(videoProjects.id, data.projectId),
+            eq(videoProjects.userId, data.userId)
+          )
+        )
+        .limit(1);
+      await database.db
+        .update(videoProjects)
+        .set({
+          metadata: {
+            ...((project?.metadata || {}) as object),
+            transcriptionStatus: 'failed',
+            metadataNotice: redactSecrets(
+              error instanceof Error
+                ? `Bro could not read the spoken text: ${error.message} You can still write the post fields yourself and publish.`
+                : 'Bro could not read the spoken text. You can still write the post fields yourself and publish.'
+            ),
+          },
+          state: 'ready',
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(videoProjects.id, data.projectId),
+            eq(videoProjects.userId, data.userId)
+          )
+        );
+    } else if (
+      (name === 'validate-video' || name === 'render-video') &&
       data.projectId
     )
       await database.db
