@@ -101,6 +101,18 @@ if (!databaseUrl) {
               );
             }
             await markJob(job.id, 'completed');
+            console.log(
+              JSON.stringify(
+                redactSecrets({
+                  level: 'info',
+                  service: 'bro-worker',
+                  jobId: job.id,
+                  kind: name,
+                  correlationId: data.correlationId,
+                  message: 'Job completed',
+                })
+              )
+            );
           } catch (error) {
             console.error(
               JSON.stringify(
@@ -110,7 +122,8 @@ if (!databaseUrl) {
                   jobId: job.id,
                   kind: name,
                   correlationId: data.correlationId,
-                  message: error instanceof Error ? error.message : String(error),
+                  message:
+                    error instanceof Error ? error.message : String(error),
                 })
               )
             );
