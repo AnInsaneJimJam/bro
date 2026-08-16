@@ -838,10 +838,6 @@ function Videos() {
       cameraStream.current = stream;
       setRecordMode('live');
       setStatus('Recording…');
-      // The <video> element mounts with this render, so attach srcObject next tick.
-      setTimeout(() => {
-        if (cameraVideo.current) cameraVideo.current.srcObject = stream;
-      }, 0);
       const mimeType = [
           'video/webm;codecs=vp9,opus',
           'video/webm;codecs=vp8,opus',
@@ -910,6 +906,16 @@ function Videos() {
     return () => window.clearInterval(timer);
   }, [recordMode]);
   useEffect(() => stopCameraStream, []);
+  // The live-camera <video> only exists in the DOM once recordMode is
+  // 'live', so attach the stream here instead of racing the render that
+  // mounts it.
+  useEffect(() => {
+    if (recordMode !== 'live' || !cameraVideo.current || !cameraStream.current)
+      return;
+    const el = cameraVideo.current;
+    el.srcObject = cameraStream.current;
+    void el.play().catch(() => {});
+  }, [recordMode]);
   async function upload(file?: File) {
     if (!file || uploading) return;
     setUploading(true);
