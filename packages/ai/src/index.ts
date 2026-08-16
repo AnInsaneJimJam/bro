@@ -93,13 +93,11 @@ export const toolSchemas = {
 } as const;
 export type ToolName = keyof typeof toolSchemas;
 
-// Kept in the schema registry so the editing slice can be re-enabled without
-// changing the domain contract, but deliberately omitted from live model tool
-// declarations until subtitle editing is ready for creators.
-export const deferredVideoEditingTools = [
-  'transcribe_video_for_captions',
-  'render_captioned_video',
-] as const satisfies readonly ToolName[];
+// English caption transcription/burn-in is live; nothing is deferred here
+// anymore, but the gate is kept as a no-op list so a future editing feature
+// (trim/reframe/B-roll) can reuse the same on/off mechanism.
+export const deferredVideoEditingTools =
+  [] as const satisfies readonly ToolName[];
 
 export function isDeferredVideoEditingTool(name: string) {
   return (deferredVideoEditingTools as readonly string[]).includes(name);

@@ -1,6 +1,6 @@
 # Bro — implementation context and manual-test handoff
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 This file is the current engineering handoff for the Bro hackathon project. It records what is implemented, what is deployed, what has been verified, and what still needs a human/provider test. It intentionally contains no passwords, OAuth tokens, API keys, or service-role secrets.
 
@@ -10,13 +10,14 @@ Bro is a desktop-optimized responsive web app for solo creators publishing Engli
 
 The active video scope is deliberately simple:
 
-1. Upload one original video to private storage.
+1. Upload a video to private storage, either as a file or recorded directly in the browser.
 2. Validate it on a worker.
 3. Enter separate YouTube title/description/visibility and Instagram caption metadata.
-4. Publish immediately or schedule to YouTube, Instagram, or both.
-5. Track each destination independently and retry only failed destinations.
+4. Optionally edit and burn in auto-generated English captions; publishing then uses the captioned render instead of the original.
+5. Publish immediately or schedule to YouTube, Instagram, or both.
+6. Track each destination independently and retry only failed destinations.
 
-Subtitle transcription, caption editing, and caption burn-in are deferred. Their lower-level video/database primitives remain in the repository for a later editing slice, but the active UI and live model tools do not offer subtitles and subtitles do not block publishing.
+English caption transcription and burn-in are live: the transcribe-video job that already runs after validation also generates caption cues, the Upload page shows an editable captions list once they exist, and a "Burn in captions" action renders them into the video via FFmpeg. Publishing automatically prefers the captioned render over the original when one exists. Captions remain optional and never block publishing. Bro Chat can also trigger `transcribe_video_for_captions`/`render_captioned_video`.
 
 ## Current repository and deployment
 
@@ -136,10 +137,11 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 - Worker states and retryable validation failures are visible in the UI.
 - Upload UI now catches network/storage/finalization errors, clears the file input for retry, and shows explicit progress states.
 - The upload/publish screen has been refactored into a responsive preview panel plus a separate post-details editor. Preview, processing status, destination cards, metadata fields, and publish controls no longer compete inside the old caption-editor grid.
+- A creator can also record directly in the browser (camera + microphone via `MediaRecorder`), with a live preview, a 60-second auto-stop matching the worker's default `MAX_VIDEO_DURATION_SECONDS`, and retake/use controls before the recording enters the same upload/validate pipeline as a picked file.
 - After validation, the upload flow automatically queues English speech transcription. When the transcript is ready, it automatically drafts the YouTube title, YouTube description, and Instagram caption and fills those editable fields. The creator still reviews/edits everything before publishing.
-- Video text transcription prefers `OPENAI_API_KEY` when configured and otherwise uses `GEMINI_API_KEY`; OpenRouter/Nemotron is text-only and cannot transcribe an uploaded video. Gemini-only word timing is evenly distributed across the transcript for the deferred caption pipeline, while publishing remains unblocked.
+- Video text transcription prefers `GROQ_API_KEY` (free, no observed reliability issues), then `OPENAI_API_KEY`, then `GEMINI_API_KEY`; OpenRouter/Nemotron is text-only and cannot transcribe an uploaded video. Recorded voice commands in Bro Chat use the same provider order. Gemini-only word timing is evenly distributed across the transcript.
 - AI metadata drafting is transcript-only. It uses the configured text provider when available and falls back to a clearly labeled deterministic draft if the provider is unavailable, without inventing trend evidence.
-- Subtitle/caption editing and burn-in remain deferred for this MVP. The lower-level caption primitives and worker jobs remain available for the later editing slice.
+- English caption editing and burn-in are live. Once a transcript succeeds, generated cues appear in an editable list on the Upload page; a creator can edit cue text and "Burn in captions" to render them into the video via FFmpeg. Publishing automatically uses that captioned render over the original once it exists. Captions are optional and never block publishing.
 
 ### Publishing and scheduling
 
@@ -250,8 +252,8 @@ If `GEMINI_API_KEY` is absent, the expected result is a clear “Text AI is not 
 
 ### 6. Upload and publish one platform
 
-- Open Videos.
-- Upload a real MP4/MOV/WebM file under the configured 50 MB and 60-second limits.
+- Open Upload.
+- Upload a real MP4/MOV/WebM file under the configured 50 MB and 60-second limits, or use Record video to capture one directly.
 - Wait for `ready` validation.
 - Select one connected destination.
 - Enter a YouTube title/description/visibility or Instagram caption.
@@ -260,6 +262,13 @@ If `GEMINI_API_KEY` is absent, the expected result is a clear “Text AI is not 
 - Check Calendar/job status and the provider’s returned URL/media ID.
 
 Expected state progression: upload queued → validation → ready → confirmation (when auto-publish is off) → scheduled/processing → uploading → published or a clear provider failure.
+
+### 6a. English captions (optional, requires a transcription key)
+
+- After the transcript drafts the post fields, an "English captions" list appears below the post editor.
+- Edit a cue's text and Save captions.
+- Burn in captions and wait for "Captioned video ready."
+- Publish; confirm the published video has the captions burned in rather than the original silent frame.
 
 ### 7. Upload and publish both platforms
 
@@ -324,8 +333,8 @@ Never send access tokens, refresh tokens, client secrets, service-role keys, dat
 - No real provider publish has been verified in this repository because no account is connected.
 - Instagram long-lived-token exchange/refresh behavior must be revalidated against the exact Meta product/API version selected in the provider console before public launch.
 - A credential-backed Supabase/RLS integration test with two real users is still missing; route-level ownership checks and RLS migrations exist.
-- AI paths return a configuration error when no OpenRouter/Gemini/OpenAI text key is configured; recorded audio commands separately require Gemini/OpenAI. They must not fall back to fabricated live data.
-- Full subtitle transcription/caption editing/rendering remains intentionally deferred. The upload flow now performs only the transcript read needed to draft post metadata; it does not expose or require caption editing before publish.
+- AI paths return a configuration error when no OpenRouter/Gemini/OpenAI text key is configured; recorded audio commands separately require Groq, Gemini, or OpenAI. They must not fall back to fabricated live data.
+- Caption cue timing comes directly from the transcription provider's word alignment (or Gemini's evenly distributed fallback) and is not yet independently editable in the UI; only cue text can be edited before burn-in. A dedicated timing/style editor is still later roadmap.
 - Upload progress is state-based rather than byte-progress based; Supabase signed upload is used directly from the browser.
 - Provider APIs can reject media, permissions, quotas, or accounts even when the application code is healthy; those errors must be handled as provider limitations, not hidden.
 
@@ -341,7 +350,7 @@ Never send access tokens, refresh tokens, client secrets, service-role keys, dat
 
 ### Later roadmap
 
-1. Reintroduce the caption/subtitle editing slice: word timestamps, cue editor, style controls, FFmpeg burn-in, and rendered-variant publishing.
+1. Add cue timing/style controls (font, position, per-cue start/end adjustment) on top of the live text-only caption editor.
 2. Add richer vertical editing (trim/reframe/B-roll/music) while preserving the current project model.
 3. Add evaluation fixtures and model-quality monitoring for niche, scripts, trends, and comments.
 4. Add suggested posting-time analytics while keeping manual scheduling authoritative.

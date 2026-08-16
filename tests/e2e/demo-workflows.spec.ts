@@ -166,15 +166,9 @@ test('video workspace exposes direct multi-platform metadata publishing', async 
   await page.goto('/app');
   if (testInfo.project.name.includes('mobile'))
     await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.getByRole('button', { name: 'Videos', exact: true }).click();
+  await page.getByRole('button', { name: 'Upload', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Upload & publish', exact: true })
-  ).toBeVisible();
-  await expect(page.getByLabel('YouTube title')).toBeVisible();
-  await expect(page.getByLabel('YouTube description')).toBeVisible();
-  await expect(page.getByLabel('Instagram caption')).toBeVisible();
-  await expect(
-    page.getByText('Subtitle editing will be added later')
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Publish now' })

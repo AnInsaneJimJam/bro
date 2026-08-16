@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Save,
   Upload,
+  Video as VideoIcon,
   Youtube,
 } from 'lucide-react';
 type Opportunity = {
@@ -46,6 +47,12 @@ type VideoDraftMetadata = {
   title: string;
   description: string;
   instagramCaption: string;
+};
+type CaptionCue = {
+  text: string;
+  start: number;
+  end: number;
+  style?: Record<string, unknown>;
 };
 type VideoStatusMetadata = {
   hasTranscript?: boolean;
@@ -582,9 +589,21 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
     </Surface>
   );
 }
+// A camera recording defaults to 60s to match the worker's default
+// MAX_VIDEO_DURATION_SECONDS; the worker still enforces the real limit.
+const defaultMaxRecordingSeconds = 60;
+function formatRecordTime(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60),
+    seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
 function Videos() {
   const input = useRef<HTMLInputElement>(null),
     video = useRef<HTMLVideoElement>(null),
+    cameraVideo = useRef<HTMLVideoElement>(null),
+    cameraStream = useRef<MediaStream | null>(null),
+    recorder = useRef<MediaRecorder | null>(null),
+    chunks = useRef<Blob[]>([]),
     transcriptionRequested = useRef(new Set<string>()),
     metadataRequested = useRef(new Set<string>()),
     [projectId, setProjectId] = useState(''),
@@ -592,6 +611,12 @@ function Videos() {
     [status, setStatus] = useState(
       'Upload a video to publish it to YouTube and Instagram.'
     ),
+    [recordMode, setRecordMode] = useState<'idle' | 'live' | 'preview'>('idle'),
+    [recordSeconds, setRecordSeconds] = useState(0),
+    [recordedClip, setRecordedClip] = useState<{
+      blob: Blob;
+      url: string;
+    } | null>(null),
     [uploading, setUploading] = useState(false),
     [drafting, setDrafting] = useState(false),
     [refreshing, setRefreshing] = useState(false),
@@ -608,7 +633,14 @@ function Videos() {
     [youtubeVisibility, setYoutubeVisibility] = useState<
       'public' | 'unlisted' | 'private'
     >('unlisted'),
-    [instagramCaption, setInstagramCaption] = useState('');
+    [instagramCaption, setInstagramCaption] = useState(''),
+    captionsLoaded = useRef(new Set<string>()),
+    [cues, setCues] = useState<CaptionCue[]>([]),
+    [cuesUpdatedAt, setCuesUpdatedAt] = useState(''),
+    [captionsStatus, setCaptionsStatus] = useState(''),
+    [savingCaptions, setSavingCaptions] = useState(false),
+    [burningIn, setBurningIn] = useState(false),
+    [captionedReady, setCaptionedReady] = useState(false);
   useEffect(() => {
     void loadConnections();
   }, []);
@@ -705,6 +737,179 @@ function Videos() {
         'Post fields drafted from the spoken text. Review them before publishing.'
     );
   }
+  async function loadCaptions(targetProjectId: string) {
+    if (
+      !targetProjectId ||
+      targetProjectId === 'demo' ||
+      captionsLoaded.current.has(targetProjectId)
+    )
+      return;
+    captionsLoaded.current.add(targetProjectId);
+    const response = await fetch(`/api/videos/${targetProjectId}/captions`),
+      data = await response.json();
+    if (!response.ok) return;
+    setCues(data.cues || []);
+    setCuesUpdatedAt(data.project?.updatedAt || '');
+  }
+  async function saveCaptions() {
+    if (!projectId || projectId === 'demo') return;
+    setSavingCaptions(true);
+    setCaptionsStatus('');
+    const response = await fetch(`/api/videos/${projectId}/captions`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedUpdatedAt: cuesUpdatedAt,
+          cues: cues.map((cue) => ({
+            text: cue.text,
+            start: cue.start,
+            end: cue.end,
+            style: cue.style,
+          })),
+        }),
+      }),
+      data = await response.json();
+    setSavingCaptions(false);
+    if (!response.ok) {
+      setCaptionsStatus(data.error || 'Bro could not save the captions.');
+      return;
+    }
+    setCuesUpdatedAt(data.updatedAt);
+    setCaptionsStatus('Captions saved.');
+  }
+  async function burnInCaptions() {
+    if (!projectId || projectId === 'demo') return;
+    setBurningIn(true);
+    setCaptionsStatus('Burning captions into the video…');
+    const response = await fetch(`/api/videos/${projectId}/render`, {
+        method: 'POST',
+      }),
+      data = await response.json();
+    if (!response.ok) {
+      setBurningIn(false);
+      setCaptionsStatus(data.error || 'Bro could not render captions.');
+      return;
+    }
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const statusResponse = await fetch(
+          `/api/sync/content/status?kind=render-video&bossJobId=${encodeURIComponent(data.bossJobId)}`
+        ),
+        statusData = await statusResponse.json();
+      if (!statusResponse.ok) {
+        setCaptionsStatus(
+          statusData.error || 'Caption render status is unavailable.'
+        );
+        break;
+      }
+      if (statusData.state === 'completed') {
+        setCaptionedReady(true);
+        setCaptionsStatus(
+          'Captioned video ready. Publishing will use this version.'
+        );
+        break;
+      }
+      if (
+        statusData.state === 'failed_retryable' ||
+        statusData.state === 'failed_permanent'
+      ) {
+        setCaptionsStatus(
+          statusData.lastErrorMessage || 'Caption rendering failed.'
+        );
+        break;
+      }
+    }
+    setBurningIn(false);
+  }
+  function stopCameraStream() {
+    cameraStream.current?.getTracks().forEach((track) => track.stop());
+    cameraStream.current = null;
+  }
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 720 },
+          height: { ideal: 1280 },
+        },
+        audio: true,
+      });
+      cameraStream.current = stream;
+      setRecordMode('live');
+      setStatus('Recording…');
+      // The <video> element mounts with this render, so attach srcObject next tick.
+      setTimeout(() => {
+        if (cameraVideo.current) cameraVideo.current.srcObject = stream;
+      }, 0);
+      const mimeType = [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+        ].find((type) => MediaRecorder.isTypeSupported(type)),
+        next = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      chunks.current = [];
+      next.ondataavailable = (event) => {
+        if (event.data.size) chunks.current.push(event.data);
+      };
+      next.onstop = () => {
+        const blob = new Blob(chunks.current, {
+          type: next.mimeType || 'video/webm',
+        });
+        setRecordedClip({ blob, url: URL.createObjectURL(blob) });
+        setRecordMode('preview');
+        stopCameraStream();
+      };
+      recorder.current = next;
+      next.start();
+      setRecordSeconds(0);
+    } catch {
+      setStatus('Camera/microphone permission was not granted.');
+    }
+  }
+  function stopRecording() {
+    recorder.current?.stop();
+  }
+  function retakeRecording() {
+    if (recordedClip) URL.revokeObjectURL(recordedClip.url);
+    setRecordedClip(null);
+    void startRecording();
+  }
+  function cancelRecording() {
+    recorder.current?.stop();
+    stopCameraStream();
+    if (recordedClip) URL.revokeObjectURL(recordedClip.url);
+    setRecordedClip(null);
+    setRecordMode('idle');
+    setStatus('Upload a video to publish it to YouTube and Instagram.');
+  }
+  async function useRecording() {
+    if (!recordedClip) return;
+    const extension = recordedClip.blob.type.includes('mp4') ? 'mp4' : 'webm',
+      baseMime =
+        recordedClip.blob.type.split(';', 1)[0]?.trim() || 'video/webm',
+      file = new File(
+        [recordedClip.blob],
+        `recording-${Date.now()}.${extension}`,
+        { type: baseMime }
+      );
+    URL.revokeObjectURL(recordedClip.url);
+    setRecordedClip(null);
+    setRecordMode('idle');
+    await upload(file);
+  }
+  useEffect(() => {
+    if (recordMode !== 'live') return;
+    const timer = window.setInterval(() => {
+      setRecordSeconds((seconds) => {
+        const next = seconds + 1;
+        if (next >= defaultMaxRecordingSeconds) stopRecording();
+        return next;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [recordMode]);
+  useEffect(() => stopCameraStream, []);
   async function upload(file?: File) {
     if (!file || uploading) return;
     setUploading(true);
@@ -715,6 +920,10 @@ function Videos() {
     setYoutubeTitle('');
     setYoutubeDescription('');
     setInstagramCaption('');
+    setCues([]);
+    setCuesUpdatedAt('');
+    setCaptionsStatus('');
+    setCaptionedReady(false);
     try {
       setStatus('Requesting a private signed upload…');
       const signed = await fetch('/api/uploads/sign', {
@@ -812,6 +1021,7 @@ function Videos() {
       applyVideoDraft(draft);
       setMetadataReady(true);
     }
+    if (statusMetadata.hasTranscript) void loadCaptions(targetProjectId);
     if (d.demo) setStatus('Demo data — edits stay in this browser.');
     else if (nextState === 'failed')
       setStatus(
@@ -956,7 +1166,7 @@ function Videos() {
       title="Upload & publish"
       subtitle="Upload once, then publish the original video to YouTube Shorts, Instagram Reels, or both."
       action={
-        <>
+        <div className="video-header-actions">
           <input
             ref={input}
             hidden
@@ -966,67 +1176,111 @@ function Videos() {
           />
           <button
             onClick={() => input.current?.click()}
-            disabled={uploading}
+            disabled={uploading || recordMode !== 'idle'}
             data-busy={uploading}
           >
             <Upload />
             Upload video
           </button>
-        </>
+          <button
+            onClick={startRecording}
+            disabled={uploading || recordMode !== 'idle'}
+          >
+            <VideoIcon />
+            Record video
+          </button>
+        </div>
       }
     >
       <div className="publish-workspace">
         <section className="video-preview-panel">
           <div className="video-frame">
-            {preview ? (
+            {recordMode === 'live' ? (
+              <>
+                <video ref={cameraVideo} autoPlay muted playsInline />
+                <span className="record-indicator">
+                  <i /> {formatRecordTime(recordSeconds)}
+                </span>
+              </>
+            ) : recordMode === 'preview' && recordedClip ? (
+              <video src={recordedClip.url} controls playsInline />
+            ) : preview ? (
               <video ref={video} src={preview} controls playsInline />
             ) : (
               <div className="video-empty">
                 <VerticalVideoGlyph />
-                <span>Upload a vertical video to preview it here.</span>
+                <span>
+                  Upload or record a vertical video to preview it here.
+                </span>
               </div>
             )}
           </div>
-          <div className="video-status" role="status" aria-live="polite">
-            <i className={projectState === 'failed' ? 'error' : ''} />
-            <span>{status}</span>
-          </div>
-          <div className="video-actions">
-            {projectId && projectId !== 'demo' && (
-              <button
-                onClick={async () => {
-                  setRefreshing(true);
-                  try {
-                    await refresh();
-                  } finally {
-                    setRefreshing(false);
-                  }
-                }}
-                disabled={refreshing}
-                data-busy={refreshing}
-              >
-                <RefreshCw />
-                Refresh status
+          {recordMode === 'live' ? (
+            <div className="video-actions">
+              <button onClick={stopRecording} className="primary-small">
+                Stop recording
               </button>
-            )}
-            {projectId && projectId !== 'demo' && projectState === 'failed' && (
+              <button onClick={cancelRecording}>Cancel</button>
+            </div>
+          ) : recordMode === 'preview' ? (
+            <div className="video-actions">
               <button
-                onClick={async () => {
-                  setRetrying(true);
-                  try {
-                    await retryValidation();
-                  } finally {
-                    setRetrying(false);
-                  }
-                }}
-                disabled={retrying}
-                data-busy={retrying}
+                onClick={useRecording}
+                className="primary-small"
+                disabled={uploading}
+                data-busy={uploading}
               >
-                <RefreshCw />
-                Retry processing
+                Use this recording
               </button>
-            )}
-          </div>
+              <button onClick={retakeRecording}>Retake</button>
+              <button onClick={cancelRecording}>Cancel</button>
+            </div>
+          ) : (
+            <>
+              <div className="video-status" role="status" aria-live="polite">
+                <i className={projectState === 'failed' ? 'error' : ''} />
+                <span>{status}</span>
+              </div>
+              <div className="video-actions">
+                {projectId && projectId !== 'demo' && (
+                  <button
+                    onClick={async () => {
+                      setRefreshing(true);
+                      try {
+                        await refresh();
+                      } finally {
+                        setRefreshing(false);
+                      }
+                    }}
+                    disabled={refreshing}
+                    data-busy={refreshing}
+                  >
+                    <RefreshCw />
+                    Refresh status
+                  </button>
+                )}
+                {projectId &&
+                  projectId !== 'demo' &&
+                  projectState === 'failed' && (
+                    <button
+                      onClick={async () => {
+                        setRetrying(true);
+                        try {
+                          await retryValidation();
+                        } finally {
+                          setRetrying(false);
+                        }
+                      }}
+                      disabled={retrying}
+                      data-busy={retrying}
+                    >
+                      <RefreshCw />
+                      Retry processing
+                    </button>
+                  )}
+              </div>
+            </>
+          )}
           <p className="video-hint">
             Bro reads the spoken English in short videos and drafts the title,
             description, and Reel caption for you.
@@ -1159,6 +1413,62 @@ function Videos() {
           </div>
         </section>
       </div>
+      {cues.length > 0 && (
+        <section className="cue-editor">
+          <header>
+            <div>
+              <strong>English captions</strong>
+              <span>
+                {captionedReady
+                  ? 'Burned in — publishing will use this captioned version.'
+                  : 'Auto-generated from the transcript. Edit the text below, then burn them into the video.'}
+              </span>
+            </div>
+          </header>
+          {cues.map((cue, i) => (
+            <div className="cue" key={i}>
+              <span>{i + 1}</span>
+              <textarea
+                value={cue.text}
+                onChange={(e) =>
+                  setCues(
+                    cues.map((c, n) =>
+                      n === i ? { ...c, text: e.target.value } : c
+                    )
+                  )
+                }
+              />
+              <label>
+                Start
+                <input value={cue.start.toFixed(1)} readOnly />
+              </label>
+              <label>
+                End
+                <input value={cue.end.toFixed(1)} readOnly />
+              </label>
+            </div>
+          ))}
+          <button
+            className="primary-small"
+            onClick={saveCaptions}
+            disabled={savingCaptions}
+            data-busy={savingCaptions}
+          >
+            <Save />
+            Save captions
+          </button>
+          <button
+            onClick={burnInCaptions}
+            disabled={burningIn}
+            data-busy={burningIn}
+          >
+            {captionedReady ? 'Re-burn captions' : 'Burn in captions'}
+          </button>
+          {captionsStatus && (
+            <small className="cue-error">{captionsStatus}</small>
+          )}
+        </section>
+      )}
     </Surface>
   );
 }

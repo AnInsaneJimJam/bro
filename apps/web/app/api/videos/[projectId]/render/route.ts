@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
-import { backgroundJobs, createDatabase, videoProjects } from '@bro/db';
+import { and, eq, sql } from 'drizzle-orm';
+import {
+  backgroundJobs,
+  captionCues,
+  createDatabase,
+  videoProjects,
+} from '@bro/db';
 import { requireUser } from '@/lib/auth';
 import { enqueueJob } from '@/lib/jobs';
 import { jsonError } from '@/lib/http';
@@ -32,8 +37,21 @@ export async function POST(
       throw Object.assign(new Error('Video project not found'), {
         status: 404,
       });
-    if (project.state !== 'captions_ready' && project.state !== 'failed')
-      throw new Error('Captions must be ready before rendering');
+    // Captions live alongside a normally publish-ready 'ready' project (the
+    // transcript pass never blocks publishing), so check for actual cue rows
+    // instead of a dedicated state that the transcript step no longer sets.
+    if (
+      project.state !== 'ready' &&
+      project.state !== 'captions_ready' &&
+      project.state !== 'failed'
+    )
+      throw new Error('The video must finish validating before rendering');
+    const cueRows = await database.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(captionCues)
+      .where(eq(captionCues.projectId, projectId));
+    if (!cueRows[0]?.count)
+      throw new Error('Captions must be generated before rendering');
     const correlationId = crypto.randomUUID(),
       bossJobId = await enqueueJob(
         'render-video',

@@ -7,7 +7,9 @@ import { jsonError } from '@/lib/http';
 
 const query = z.object({
   bossJobId: z.string().min(1).max(200),
-  kind: z.enum(['sync-content', 'sync-comments']).default('sync-content'),
+  kind: z
+    .enum(['sync-content', 'sync-comments', 'render-video'])
+    .default('sync-content'),
 });
 
 export async function GET(request: Request) {

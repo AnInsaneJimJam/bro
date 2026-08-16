@@ -1647,6 +1647,11 @@ header p {
 .feature > header {
   margin-bottom: 30px;
 }
+.video-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .feature > header > div:first-child {
   max-width: 650px;
 }
@@ -1909,6 +1914,7 @@ header p {
   gap: 12px;
 }
 .video-frame {
+  position: relative;
   width: min(100%, 360px);
   aspect-ratio: 9/16;
   min-height: 360px;
@@ -1929,6 +1935,42 @@ header p {
   display: block;
   object-fit: contain;
   background: #000;
+}
+.video-frame video[autoplay] {
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.record-indicator {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #000000a0;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.record-indicator i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--coral);
+  animation: record-pulse 1.2s ease-in-out infinite;
+}
+@keyframes record-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .record-indicator i {
+    animation: none;
+  }
 }
 .video-empty {
   display: grid;
@@ -2140,6 +2182,27 @@ header p {
   opacity: 0.45;
   cursor: not-allowed;
 }
+.cue-editor {
+  margin-top: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px;
+}
+.cue-editor header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.cue-editor header strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.cue-editor header span {
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 520px;
+  line-height: 1.5;
+}
 .cue {
   display: grid;
   grid-template-columns: 24px 1fr 75px 75px;
@@ -2147,6 +2210,11 @@ header p {
   align-items: start;
   padding: 12px 0;
   border-top: 1px solid var(--line);
+}
+.cue > span {
+  padding-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
 }
 .cue textarea {
   min-height: 62px;
@@ -2159,6 +2227,10 @@ header p {
 .cue input {
   width: 100%;
   padding: 7px;
+}
+.cue input[readonly] {
+  background: var(--soft);
+  color: var(--muted);
 }
 .cue-editor > button {
   display: inline-flex;
