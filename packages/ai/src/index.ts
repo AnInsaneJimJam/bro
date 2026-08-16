@@ -188,3 +188,8 @@ export const commentAnalysisOutput = z.object({
     z.object({ commentId: z.string().uuid(), whyRepresentative: z.string() })
   ),
 });
+export const videoMetadataOutput = z.object({
+  title: z.string().min(1).max(100),
+  description: z.string().max(5000),
+  instagramCaption: z.string().max(2200),
+});

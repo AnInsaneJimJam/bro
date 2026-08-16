@@ -34,7 +34,7 @@ export async function POST(
       });
     await database.db
       .update(videoProjects)
-      .set({ state: 'queued', updatedAt: new Date() })
+      .set({ state: 'transcribing', updatedAt: new Date() })
       .where(
         and(eq(videoProjects.id, projectId), eq(videoProjects.userId, user.id))
       );
@@ -59,7 +59,7 @@ export async function POST(
       correlationId,
     });
     return NextResponse.json(
-      { projectId, state: 'queued', bossJobId, correlationId },
+      { projectId, state: 'transcribing', bossJobId, correlationId },
       { status: 202 }
     );
   } catch (error) {

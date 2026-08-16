@@ -135,7 +135,11 @@ The browser never receives provider access/refresh tokens, OpenAI/Gemini keys, o
 - Original and derivative objects are kept in private storage buckets with short-lived signed preview URLs.
 - Worker states and retryable validation failures are visible in the UI.
 - Upload UI now catches network/storage/finalization errors, clears the file input for retry, and shows explicit progress states.
-- Subtitle/caption UI and live AI subtitle tools are intentionally disabled for this MVP.
+- The upload/publish screen has been refactored into a responsive preview panel plus a separate post-details editor. Preview, processing status, destination cards, metadata fields, and publish controls no longer compete inside the old caption-editor grid.
+- After validation, the upload flow automatically queues English speech transcription. When the transcript is ready, it automatically drafts the YouTube title, YouTube description, and Instagram caption and fills those editable fields. The creator still reviews/edits everything before publishing.
+- Video text transcription prefers `OPENAI_API_KEY` when configured and otherwise uses `GEMINI_API_KEY`; OpenRouter/Nemotron is text-only and cannot transcribe an uploaded video. Gemini-only word timing is evenly distributed across the transcript for the deferred caption pipeline, while publishing remains unblocked.
+- AI metadata drafting is transcript-only. It uses the configured text provider when available and falls back to a clearly labeled deterministic draft if the provider is unavailable, without inventing trend evidence.
+- Subtitle/caption editing and burn-in remain deferred for this MVP. The lower-level caption primitives and worker jobs remain available for the later editing slice.
 
 ### Publishing and scheduling
 
@@ -310,7 +314,7 @@ Never send access tokens, refresh tokens, client secrets, service-role keys, dat
 
 1. A human must connect a real YouTube channel and eligible Instagram professional account through the hosted OAuth flow.
 2. Run the credential-backed sync, upload, single-platform publish, two-platform publish, partial-failure retry, schedule, cancel, and comment-sync tests above.
-3. Configure a fresh `GEMINI_API_KEY` if AI niche/scripts/chat/audio commands are required, then manually test those paths.
+3. Configure a fresh `GEMINI_API_KEY` (or `OPENAI_API_KEY`) on the Railway worker if automatic video text drafting, AI niche/scripts/chat, or audio commands are required, then manually test those paths with a roughly 30-second English video.
 4. Resolve any provider-console callback, test-user, scope, quota, or account-eligibility issues exposed by those tests.
 5. Complete Google/Meta provider review and data-deletion/privacy setup before inviting users outside provider test accounts.
 6. Enable and manually test the Supabase Google provider using a Google OAuth client configured with Supabase's callback URL.
@@ -321,7 +325,7 @@ Never send access tokens, refresh tokens, client secrets, service-role keys, dat
 - Instagram long-lived-token exchange/refresh behavior must be revalidated against the exact Meta product/API version selected in the provider console before public launch.
 - A credential-backed Supabase/RLS integration test with two real users is still missing; route-level ownership checks and RLS migrations exist.
 - AI paths return a configuration error when no OpenRouter/Gemini/OpenAI text key is configured; recorded audio commands separately require Gemini/OpenAI. They must not fall back to fabricated live data.
-- Subtitle transcription, caption editing, caption rendering, and subtitle tool commands are intentionally deferred.
+- Full subtitle transcription/caption editing/rendering remains intentionally deferred. The upload flow now performs only the transcript read needed to draft post metadata; it does not expose or require caption editing before publish.
 - Upload progress is state-based rather than byte-progress based; Supabase signed upload is used directly from the browser.
 - Provider APIs can reject media, permissions, quotas, or accounts even when the application code is healthy; those errors must be handled as provider limitations, not hidden.
 

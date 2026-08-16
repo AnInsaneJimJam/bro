@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { and, asc, eq } from 'drizzle-orm';
-import { OpenAITranscriptionProvider } from '@bro/ai';
+import {
+  GeminiCommandTranscriptionProvider,
+  OpenAITranscriptionProvider,
+} from '@bro/ai';
 import {
   captionCues,
   createDatabase,
@@ -148,12 +151,6 @@ export function createVideoHandlers(): Pick<
       }),
     'transcribe-video': async (data) =>
       withTemp(async (dir) => {
-        const openai = new OpenAI({ apiKey: required('OPENAI_API_KEY') }),
-          transcriber = new OpenAITranscriptionProvider(
-            openai,
-            process.env.OPENAI_COMMAND_TRANSCRIPTION_MODEL || 'gpt-transcribe',
-            process.env.OPENAI_CAPTION_TRANSCRIPTION_MODEL || 'whisper-1'
-          );
         const lookup = createDatabase();
         const [owned] = await lookup.db
           .select({
@@ -206,12 +203,14 @@ export function createVideoHandlers(): Pick<
           .from(process.env.SUPABASE_AUDIO_BUCKET || 'bro-audio')
           .upload(audioKey, audio, { contentType: 'audio/mpeg', upsert: true });
         if (uploaded.error) throw new Error(uploaded.error.message);
-        const transcript = await transcriber.transcribeWithWordTimestamps(
-            new File([audio], 'audio.mp3', { type: 'audio/mpeg' })
-          ),
+        const transcript = await transcribeVideoAudio(audio, metadata.duration),
           cues = segmentCaptions(transcript.words);
         const database = createDatabase();
         try {
+          const existingMetadata = (owned.metadata || {}) as Record<
+            string,
+            unknown
+          >;
           await database.db.transaction(async (tx) => {
             await tx
               .delete(captionCues)
@@ -249,8 +248,18 @@ export function createVideoHandlers(): Pick<
             await tx
               .update(videoProjects)
               .set({
-                metadata: { ...metadata, audioObjectKey: audioKey },
-                state: 'captions_ready',
+                metadata: {
+                  ...existingMetadata,
+                  ...metadata,
+                  audioObjectKey: audioKey,
+                  transcriptText: transcript.text,
+                  transcriptionStatus: 'ready',
+                  transcriptionProvider: transcript.provider,
+                },
+                // Captions are useful for metadata drafting, but they are not
+                // required for publishing in this MVP. Keep the project
+                // publish-ready after the optional transcript pass.
+                state: 'ready',
                 updatedAt: new Date(),
               })
               .where(
@@ -348,6 +357,60 @@ export function createVideoHandlers(): Pick<
         }
       }),
   };
+}
+
+async function transcribeVideoAudio(audio: Buffer, duration: number) {
+  // Copy into an ArrayBuffer-backed view so Node's Buffer<ArrayBufferLike>
+  // type is accepted by the Web File constructor on every supported Node
+  // version.
+  const bytes = new Uint8Array(new ArrayBuffer(audio.byteLength));
+  bytes.set(audio);
+  const file = new File([bytes.buffer as ArrayBuffer], 'audio.mp3', {
+    type: 'audio/mpeg',
+  });
+  if (process.env.OPENAI_API_KEY) {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+      transcriber = new OpenAITranscriptionProvider(
+        openai,
+        process.env.OPENAI_COMMAND_TRANSCRIPTION_MODEL || 'gpt-transcribe',
+        process.env.OPENAI_CAPTION_TRANSCRIPTION_MODEL || 'whisper-1'
+      ),
+      transcript = await transcriber.transcribeWithWordTimestamps(file);
+    return { ...transcript, provider: 'openai' };
+  }
+  if (process.env.GEMINI_API_KEY) {
+    const transcriber = new GeminiCommandTranscriptionProvider(
+        process.env.GEMINI_API_KEY,
+        process.env.GEMINI_TRANSCRIPTION_MODEL ||
+          process.env.GEMINI_TEXT_MODEL ||
+          'gemini-flash-latest'
+      ),
+      text = await transcriber.transcribeCommand(file);
+    return {
+      text,
+      words: distributeTranscriptWords(text, duration),
+      provider: 'gemini',
+    };
+  }
+  throw new Error(
+    'Video text drafting requires OPENAI_API_KEY or GEMINI_API_KEY on the worker.'
+  );
+}
+
+function distributeTranscriptWords(text: string, duration: number) {
+  const words = text
+    .split(/\s+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!words.length) return [];
+  const total = Math.max(1, duration || 1),
+    step = total / words.length;
+  return words.map((word, index) => ({
+    text: word,
+    start: index * step,
+    end: Math.min(total, (index + 1) * step),
+    confidence: undefined,
+  }));
 }
 async function download(
   storage: ReturnType<typeof createClient>['storage'],

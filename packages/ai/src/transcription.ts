@@ -53,9 +53,9 @@ export class OpenAITranscriptionProvider implements TranscriptionProvider {
 }
 
 /**
- * Gemini's generateContent audio input is useful for short recorded commands.
- * It intentionally implements only command transcription; caption workflows
- * still require a provider that returns word timestamps.
+ * Gemini's generateContent audio input is useful for short recorded commands
+ * and uploaded short videos. It returns plain text; caption workflows still
+ * require a provider that returns word timestamps.
  */
 export class GeminiCommandTranscriptionProvider implements TranscriptionProvider {
   constructor(
@@ -95,7 +95,7 @@ export class GeminiCommandTranscriptionProvider implements TranscriptionProvider
             {
               role: 'user',
               parts: [
-                { text: 'Transcribe this recorded English command.' },
+                { text: 'Transcribe this English audio recording.' },
                 {
                   inlineData: {
                     mimeType: normalizeAudioMimeType(audio.type),

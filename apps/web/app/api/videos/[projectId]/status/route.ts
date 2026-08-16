@@ -41,7 +41,14 @@ export async function GET(
       throw Object.assign(new Error('Video project not found'), {
         status: 404,
       });
-    const metadata = (row.metadata || {}) as { filename?: unknown };
+    const metadata = (row.metadata || {}) as {
+      filename?: unknown;
+      transcriptText?: unknown;
+      transcriptionStatus?: unknown;
+      transcriptionProvider?: unknown;
+      aiMetadata?: unknown;
+      metadataNotice?: unknown;
+    };
     return NextResponse.json({
       project: {
         id: row.id,
@@ -49,6 +56,26 @@ export async function GET(
         updatedAt: row.updatedAt,
         filename:
           typeof metadata.filename === 'string' ? metadata.filename : null,
+        metadata: {
+          hasTranscript:
+            typeof metadata.transcriptText === 'string' &&
+            metadata.transcriptText.trim().length > 0,
+          transcriptionStatus:
+            typeof metadata.transcriptionStatus === 'string'
+              ? metadata.transcriptionStatus
+              : null,
+          transcriptionProvider:
+            typeof metadata.transcriptionProvider === 'string'
+              ? metadata.transcriptionProvider
+              : null,
+          aiMetadata: isVideoMetadata(metadata.aiMetadata)
+            ? metadata.aiMetadata
+            : null,
+          notice:
+            typeof metadata.metadataNotice === 'string'
+              ? metadata.metadataNotice
+              : null,
+        },
       },
     });
   } catch (error) {
@@ -56,4 +83,18 @@ export async function GET(
   } finally {
     await close?.();
   }
+}
+
+function isVideoMetadata(value: unknown): value is {
+  title: string;
+  description: string;
+  instagramCaption: string;
+} {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.title === 'string' &&
+    typeof record.description === 'string' &&
+    typeof record.instagramCaption === 'string'
+  );
 }

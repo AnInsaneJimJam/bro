@@ -39,6 +39,18 @@ type ConnectionSummary = {
   status?: string;
   needsReauthorization?: boolean;
 };
+type VideoDraftMetadata = {
+  title: string;
+  description: string;
+  instagramCaption: string;
+};
+type VideoStatusMetadata = {
+  hasTranscript?: boolean;
+  transcriptionStatus?: string | null;
+  transcriptionProvider?: string | null;
+  aiMetadata?: VideoDraftMetadata | null;
+  notice?: string | null;
+};
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
@@ -396,10 +408,14 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
 function Videos() {
   const input = useRef<HTMLInputElement>(null),
     video = useRef<HTMLVideoElement>(null),
+    transcriptionRequested = useRef(new Set<string>()),
+    metadataRequested = useRef(new Set<string>()),
     [projectId, setProjectId] = useState(''),
     [projectState, setProjectState] = useState(''),
     [status, setStatus] = useState('Loading your latest video project…'),
     [uploading, setUploading] = useState(false),
+    [drafting, setDrafting] = useState(false),
+    [metadataReady, setMetadataReady] = useState(false),
     [preview, setPreview] = useState(''),
     [connections, setConnections] = useState<ConnectionSummary[]>([]),
     [connectionsLoaded, setConnectionsLoaded] = useState(false),
@@ -424,14 +440,22 @@ function Videos() {
     if (
       !projectId ||
       projectId === 'demo' ||
-      !['queued', 'uploaded', 'validating'].includes(projectState)
+      (projectState === 'ready' && metadataReady) ||
+      ![
+        'queued',
+        'uploaded',
+        'validating',
+        'transcribing',
+        'captions_ready',
+        'ready',
+      ].includes(projectState)
     )
       return;
     const timer = window.setInterval(() => {
       void refresh(projectId);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [projectId, projectState]);
+  }, [projectId, projectState, metadataReady]);
   async function loadLatestProject() {
     const response = await fetch('/api/videos?limit=1'),
       projects = await response.json();
@@ -467,11 +491,64 @@ function Videos() {
         !connection.needsReauthorization
     );
   }
+  function applyVideoDraft(draft: VideoDraftMetadata) {
+    setYoutubeTitle(draft.title);
+    setYoutubeDescription(draft.description);
+    setInstagramCaption(draft.instagramCaption);
+  }
+  async function startTranscription(targetProjectId: string) {
+    if (transcriptionRequested.current.has(targetProjectId)) return;
+    transcriptionRequested.current.add(targetProjectId);
+    setProjectState('transcribing');
+    setStatus('Reading the spoken text from your video…');
+    const response = await fetch(`/api/videos/${targetProjectId}/transcribe`, {
+        method: 'POST',
+      }),
+      data = await response.json();
+    if (!response.ok) {
+      setProjectState('ready');
+      setStatus(
+        data.error ||
+          'Bro could not read the spoken text. Add Gemini or OpenAI transcription credentials and try again.'
+      );
+      return;
+    }
+    setStatus('Transcript queued. Bro will draft the post fields next.');
+  }
+  async function draftMetadata(targetProjectId: string) {
+    if (metadataRequested.current.has(targetProjectId)) return;
+    metadataRequested.current.add(targetProjectId);
+    setDrafting(true);
+    setStatus(
+      'Drafting the title, description, and Reel caption from the transcript…'
+    );
+    const response = await fetch(`/api/videos/${targetProjectId}/metadata`, {
+        method: 'POST',
+      }),
+      data = await response.json();
+    if (!response.ok) {
+      setDrafting(false);
+      setStatus(data.error || 'Bro could not draft the post fields yet.');
+      return;
+    }
+    applyVideoDraft(data as VideoDraftMetadata);
+    setMetadataReady(true);
+    setDrafting(false);
+    setStatus(
+      data.generationNotice ||
+        'Post fields drafted from the spoken text. Review them before publishing.'
+    );
+  }
   async function upload(file?: File) {
     if (!file || uploading) return;
     setUploading(true);
     setPreview('');
     setProjectState('');
+    setMetadataReady(false);
+    setDrafting(false);
+    setYoutubeTitle('');
+    setYoutubeDescription('');
+    setInstagramCaption('');
     try {
       setStatus('Requesting a private signed upload…');
       const signed = await fetch('/api/uploads/sign', {
@@ -524,6 +601,8 @@ function Videos() {
       }
       setProjectId(created.projectId);
       setProjectState(created.state || 'queued');
+      transcriptionRequested.current.delete(created.projectId);
+      metadataRequested.current.delete(created.projectId);
       const media = await fetch(`/api/videos/${created.projectId}/media`),
         signedMedia = await media.json();
       if (media.ok) setPreview(signedMedia.url);
@@ -550,18 +629,42 @@ function Videos() {
       setStatus(d.error);
       return;
     }
-    setProjectState(d.project.state || '');
-    setStatus(
-      d.demo
-        ? 'Demo data — edits stay in this browser.'
-        : d.project.state === 'failed'
-          ? 'Video validation failed. Retry the validation job or upload a different file.'
-          : `Project state: ${d.project.state}`
-    );
+    const nextState = d.project.state || '',
+      statusMetadata = (d.project.metadata || {}) as VideoStatusMetadata,
+      draft = statusMetadata.aiMetadata;
+    setProjectState(nextState);
+    if (draft) {
+      applyVideoDraft(draft);
+      setMetadataReady(true);
+    }
+    if (d.demo) setStatus('Demo data — edits stay in this browser.');
+    else if (nextState === 'failed')
+      setStatus(
+        'Video validation or transcript generation failed. Retry the relevant step or upload a different file.'
+      );
+    else if (nextState === 'transcribing')
+      setStatus('Reading the spoken text from your video…');
+    else if (
+      (nextState === 'ready' || nextState === 'captions_ready') &&
+      statusMetadata.hasTranscript &&
+      !draft
+    ) {
+      await draftMetadata(targetProjectId);
+    } else if (nextState === 'ready' && !statusMetadata.hasTranscript) {
+      await startTranscription(targetProjectId);
+    } else if (nextState !== 'ready' || !draft) {
+      setStatus(`Project state: ${nextState}`);
+    } else if (!statusMetadata.notice) {
+      setStatus(
+        'Post fields drafted from the spoken text. Review them before publishing.'
+      );
+    }
     if (!d.demo) {
-      const media = await fetch(`/api/videos/${targetProjectId}/media`),
-        signed = await media.json();
-      if (media.ok) setPreview(signed.url);
+      if (!preview) {
+        const media = await fetch(`/api/videos/${targetProjectId}/media`),
+          signed = await media.json();
+        if (media.ok) setPreview(signed.url);
+      }
     }
   }
   async function retryValidation() {
@@ -570,6 +673,9 @@ function Videos() {
         method: 'POST',
       }),
       data = await response.json();
+    transcriptionRequested.current.delete(projectId);
+    metadataRequested.current.delete(projectId);
+    setMetadataReady(false);
     setProjectState(data.state || (response.ok ? 'queued' : 'failed'));
     setStatus(
       response.ok
@@ -672,126 +778,161 @@ function Videos() {
       }
     >
       <div className="publish-workspace">
-        <div className="video-placeholder">
-          {preview ? (
-            <video ref={video} src={preview} controls playsInline />
-          ) : (
-            <>
-              <div>9:16</div>
-              <p>Video preview appears after a validated upload.</p>
-            </>
-          )}
-          <small>{status}</small>
-          {projectId && projectId !== 'demo' && (
-            <button onClick={() => refresh()}>
-              <RefreshCw />
-              Refresh status
-            </button>
-          )}
-          {projectId && projectId !== 'demo' && projectState === 'failed' && (
-            <button onClick={retryValidation}>
-              <RefreshCw />
-              Retry validation
-            </button>
-          )}
-        </div>
-        <div className="cue-editor">
-          <header>
-            <strong>Post details</strong>
-            <span>Each platform keeps its own metadata</span>
+        <section className="video-preview-panel">
+          <div className="video-frame">
+            {preview ? (
+              <video ref={video} src={preview} controls playsInline />
+            ) : (
+              <div className="video-empty">
+                <strong>9:16</strong>
+                <span>Upload a vertical video to preview it here.</span>
+              </div>
+            )}
+          </div>
+          <div className="video-status" role="status" aria-live="polite">
+            <i className={projectState === 'failed' ? 'error' : ''} />
+            <span>{status}</span>
+          </div>
+          <div className="video-actions">
+            {projectId && projectId !== 'demo' && (
+              <button onClick={() => refresh()}>
+                <RefreshCw />
+                Refresh status
+              </button>
+            )}
+            {projectId && projectId !== 'demo' && projectState === 'failed' && (
+              <button onClick={retryValidation}>
+                <RefreshCw />
+                Retry processing
+              </button>
+            )}
+          </div>
+          <p className="video-hint">
+            Bro reads the spoken English in short videos and drafts the title,
+            description, and Reel caption for you.
+          </p>
+        </section>
+        <section className="post-editor">
+          <header className="post-editor-header">
+            <div>
+              <strong>Post details</strong>
+              <span>Review before publishing</span>
+            </div>
+            {drafting && <em>Drafting from transcript…</em>}
           </header>
-          <label>
-            <input
-              type="checkbox"
-              checked={youtubeEnabled}
-              disabled={connectionsLoaded && !providerReady('youtube')}
-              onChange={(event) => setYoutubeEnabled(event.target.checked)}
-            />{' '}
-            Publish to YouTube Shorts
-          </label>
-          {connectionsLoaded && !providerReady('youtube') && (
-            <small>
-              YouTube is not connected or needs attention.{' '}
-              <a href="/onboarding?step=connections">Connect YouTube</a>
-            </small>
-          )}
-          {youtubeEnabled && (
-            <>
-              <label>
-                YouTube title
+          <div className="destination-card">
+            <label className="destination-toggle">
+              <span>
                 <input
-                  value={youtubeTitle}
-                  maxLength={100}
-                  onChange={(event) => setYoutubeTitle(event.target.value)}
-                  placeholder="A clear title for your Short"
+                  type="checkbox"
+                  checked={youtubeEnabled}
+                  disabled={connectionsLoaded && !providerReady('youtube')}
+                  onChange={(event) => setYoutubeEnabled(event.target.checked)}
                 />
-              </label>
-              <label>
-                YouTube description
-                <textarea
-                  value={youtubeDescription}
-                  onChange={(event) =>
-                    setYoutubeDescription(event.target.value)
-                  }
-                  placeholder="Description, links, and hashtags"
-                />
-              </label>
-              <label>
-                YouTube visibility
-                <select
-                  value={youtubeVisibility}
-                  onChange={(event) =>
-                    setYoutubeVisibility(
-                      event.target.value as 'public' | 'unlisted' | 'private'
-                    )
-                  }
-                >
-                  <option value="unlisted">
-                    Unlisted (recommended for testing)
-                  </option>
-                  <option value="private">Private</option>
-                  <option value="public">Public</option>
-                </select>
-              </label>
-            </>
-          )}
-          <label>
-            <input
-              type="checkbox"
-              checked={instagramEnabled}
-              disabled={connectionsLoaded && !providerReady('instagram')}
-              onChange={(event) => setInstagramEnabled(event.target.checked)}
-            />{' '}
-            Publish to Instagram Reels
-          </label>
-          {connectionsLoaded && !providerReady('instagram') && (
-            <small>
-              Instagram is not connected or needs attention.{' '}
-              <a href="/onboarding?step=connections">Connect Instagram</a>
-            </small>
-          )}
-          {instagramEnabled && (
-            <label>
-              Instagram caption
-              <textarea
-                value={instagramCaption}
-                onChange={(event) => setInstagramCaption(event.target.value)}
-                placeholder="Caption and hashtags for your Reel"
-              />
+                <b>YouTube Shorts</b>
+              </span>
+              <small>
+                {providerReady('youtube') ? 'Connected' : 'Connect account'}
+              </small>
             </label>
-          )}
-          <button
-            className="primary-small"
-            onClick={publishNow}
-            disabled={!projectId || projectState !== 'ready'}
-          >
-            Publish now
-          </button>
-          <small>
-            Scheduling is available in Calendar. Subtitle editing will be added
-            later and does not block publishing.
-          </small>
-        </div>
+            {connectionsLoaded && !providerReady('youtube') && (
+              <p className="connection-note">
+                YouTube is not connected or needs attention.{' '}
+                <a href="/onboarding?step=connections">Connect YouTube</a>
+              </p>
+            )}
+            {youtubeEnabled && (
+              <div className="post-fields">
+                <label>
+                  Title
+                  <input
+                    value={youtubeTitle}
+                    maxLength={100}
+                    onChange={(event) => setYoutubeTitle(event.target.value)}
+                    placeholder="A clear title for your Short"
+                  />
+                  <small>{youtubeTitle.length}/100</small>
+                </label>
+                <label>
+                  Description
+                  <textarea
+                    value={youtubeDescription}
+                    onChange={(event) =>
+                      setYoutubeDescription(event.target.value)
+                    }
+                    placeholder="Description, links, and hashtags"
+                  />
+                </label>
+                <label>
+                  Visibility
+                  <select
+                    value={youtubeVisibility}
+                    onChange={(event) =>
+                      setYoutubeVisibility(
+                        event.target.value as 'public' | 'unlisted' | 'private'
+                      )
+                    }
+                  >
+                    <option value="unlisted">
+                      Unlisted (recommended for testing)
+                    </option>
+                    <option value="private">Private</option>
+                    <option value="public">Public</option>
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="destination-card">
+            <label className="destination-toggle">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={instagramEnabled}
+                  disabled={connectionsLoaded && !providerReady('instagram')}
+                  onChange={(event) =>
+                    setInstagramEnabled(event.target.checked)
+                  }
+                />
+                <b>Instagram Reels</b>
+              </span>
+              <small>
+                {providerReady('instagram') ? 'Connected' : 'Connect account'}
+              </small>
+            </label>
+            {connectionsLoaded && !providerReady('instagram') && (
+              <p className="connection-note">
+                Instagram is not connected or needs attention.{' '}
+                <a href="/onboarding?step=connections">Connect Instagram</a>
+              </p>
+            )}
+            {instagramEnabled && (
+              <label className="post-fields">
+                Caption
+                <textarea
+                  value={instagramCaption}
+                  onChange={(event) => setInstagramCaption(event.target.value)}
+                  placeholder="Caption and hashtags for your Reel"
+                />
+              </label>
+            )}
+          </div>
+          <div className="post-editor-footer">
+            <button
+              className="primary-small"
+              onClick={publishNow}
+              disabled={
+                !projectId || projectState !== 'ready' || drafting || uploading
+              }
+            >
+              Publish now
+            </button>
+            <small>
+              Scheduling is available in Calendar. You can edit every field
+              before publishing.
+            </small>
+          </div>
+        </section>
       </div>
     </Surface>
   );
