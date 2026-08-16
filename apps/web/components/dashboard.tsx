@@ -306,6 +306,11 @@ export function Dashboard() {
   }
   return (
     <main className="shell">
+      <div
+        className={mobile ? 'sidebar-scrim open' : 'sidebar-scrim'}
+        onClick={() => setMobile(false)}
+        aria-hidden="true"
+      />
       <aside className={mobile ? 'sidebar open' : 'sidebar'}>
         <div className="brand">
           Bro<span>.</span>

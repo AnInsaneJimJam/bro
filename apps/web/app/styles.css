@@ -16,10 +16,13 @@
 button,
 .landing-button,
 a.primary-link {
+  /* A snappy, no-overshoot deceleration reads as more direct/responsive than
+     linear ease — a plain tap is critically damped, not momentum-driven, so
+     it settles fast without bounce. */
   transition:
-    transform 0.08s ease,
-    filter 0.08s ease,
-    opacity 0.08s ease,
+    transform 0.12s cubic-bezier(0.2, 0, 0, 1),
+    filter 0.1s ease,
+    opacity 0.1s ease,
     box-shadow 0.15s ease;
 }
 button:enabled:hover,
@@ -79,6 +82,30 @@ button[data-busy='true']::after {
   button[data-busy='true']::after {
     transition: none;
     animation-duration: 0.001ms;
+  }
+}
+
+/*
+ * A floating surface (toast, confirmation card, sheet) should arrive like a
+ * real object settling into place, not just pop into existence — a small
+ * scale + rise paired with the fade reads as materializing rather than an
+ * opacity-only fade.
+ */
+@keyframes materialize {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .publish-confirmation {
+    animation-name: none !important;
+    opacity: 1;
   }
 }
 
@@ -769,6 +796,9 @@ body {
   background: #fff;
   z-index: 5;
 }
+.sidebar-scrim {
+  display: none;
+}
 .brand {
   font:
     700 46px/1 Georgia,
@@ -838,6 +868,9 @@ h1 {
   font:
     700 36px/1.15 Georgia,
     serif;
+  /* Large type reads too loose at its natural spacing; tighten it slightly
+     as size grows, the way optically-sized type would. */
+  letter-spacing: -0.015em;
   margin: 0 0 9px;
 }
 header p {
@@ -1175,6 +1208,7 @@ header p {
   align-items: center;
   z-index: 20;
   font-size: 13px;
+  animation: materialize 320ms cubic-bezier(0.2, 0, 0, 1) both;
 }
 .toast svg {
   width: 18px;
@@ -1247,11 +1281,41 @@ header p {
   }
   .sidebar {
     transform: translateX(-100%);
-    transition: 0.2s;
+    transition: transform 0.28s cubic-bezier(0.2, 0, 0, 1);
   }
   .sidebar.open {
     transform: none;
     box-shadow: 8px 0 30px #0002;
+  }
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    background: #00000055;
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+  }
+  .sidebar-scrim.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar {
+      transition: opacity 0.2s ease;
+      transform: none;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .sidebar.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .sidebar-scrim {
+      transition: none;
+    }
   }
   .close {
     display: block;
@@ -1823,6 +1887,7 @@ header p {
   font:
     700 22px/1.3 Georgia,
     serif;
+  letter-spacing: -0.01em;
   margin: 0 0 6px;
 }
 .script-read-head span {
@@ -2286,7 +2351,11 @@ header p {
   background: #fff;
   transition:
     border-color 0.12s ease,
-    background 0.12s ease;
+    background 0.12s ease,
+    transform 0.1s cubic-bezier(0.2, 0, 0, 1);
+}
+.calendar-cell:active:not(.past):not(.empty) {
+  transform: scale(0.98);
 }
 .calendar-cell:hover:not(.past) {
   border-color: var(--coral);
@@ -2720,6 +2789,7 @@ header p {
 }
 .chat-intro h3 {
   font: 700 27px Georgia;
+  letter-spacing: -0.015em;
 }
 .chat-intro p {
   color: var(--muted);
@@ -2752,6 +2822,7 @@ header p {
 }
 .chat-empty h3 {
   font: 700 27px Georgia;
+  letter-spacing: -0.015em;
   margin: 0 0 12px;
 }
 .chat-empty p {
@@ -2824,6 +2895,7 @@ header p {
   border-radius: 9px;
   padding: 18px;
   box-shadow: 0 18px 60px #0002;
+  animation: materialize 280ms cubic-bezier(0.2, 0, 0, 1) both;
 }
 .publish-confirmation header,
 .publish-confirmation footer {
