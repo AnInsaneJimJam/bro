@@ -1,7 +1,3 @@
-<p align="center">
-  <img src=".github/logo.svg" width="56" alt="">
-</p>
-
 <h1 align="center">
   <img src=".github/banner.png" width="300" alt="Bro">
 </h1>
