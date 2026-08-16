@@ -382,7 +382,8 @@ async function transcribeVideoAudio(audio: Buffer, duration: number) {
   if (process.env.GROQ_API_KEY) {
     const transcriber = new OpenAITranscriptionProvider(
         createGroqTranscriptionClient(process.env.GROQ_API_KEY),
-        process.env.GROQ_COMMAND_TRANSCRIPTION_MODEL || 'whisper-large-v3-turbo',
+        process.env.GROQ_COMMAND_TRANSCRIPTION_MODEL ||
+          'whisper-large-v3-turbo',
         process.env.GROQ_CAPTION_TRANSCRIPTION_MODEL || 'whisper-large-v3'
       ),
       transcript = await transcriber.transcribeWithWordTimestamps(file);
