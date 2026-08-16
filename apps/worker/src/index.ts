@@ -102,6 +102,18 @@ if (!databaseUrl) {
             }
             await markJob(job.id, 'completed');
           } catch (error) {
+            console.error(
+              JSON.stringify(
+                redactSecrets({
+                  level: 'error',
+                  service: 'bro-worker',
+                  jobId: job.id,
+                  kind: name,
+                  correlationId: data.correlationId,
+                  message: error instanceof Error ? error.message : String(error),
+                })
+              )
+            );
             await markJob(job.id, 'failed_retryable', error);
             if (name !== 'refresh-recent-comments')
               await markDomainFailure(
