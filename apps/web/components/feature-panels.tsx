@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  FileText,
   Film,
   Instagram,
   Plus,
@@ -63,6 +64,11 @@ type ChatMessage = {
  */
 const FOCUS_PROJECT_KEY = 'bro:focusProjectId';
 /**
+ * Set by "Generate script" on Ideas so Scripts opens with that new script
+ * selected, the same way a chat-generated script opens automatically.
+ */
+const FOCUS_SCRIPT_KEY = 'bro:focusScriptId';
+/**
  * Tracks which named action is in flight so a button can show a spinner
  * (via data-busy) instead of leaving a click with no visible response.
  */
@@ -106,7 +112,11 @@ export function FeaturePanel({
 function Ideas() {
   const [items, setItems] = useState<Opportunity[]>([]),
     [loading, setLoading] = useState(true),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    [genError, setGenError] = useState<{ id: string; text: string } | null>(
+      null
+    ),
+    { isBusy, run } = useBusy();
   async function load(refresh = false) {
     setLoading(true);
     const r = await fetch(
@@ -127,6 +137,32 @@ function Ideas() {
   useEffect(() => {
     load();
   }, []);
+  async function generateScript(topic: Opportunity) {
+    await run(topic.id, () => generateScriptFromIdea(topic));
+  }
+  async function generateScriptFromIdea(topic: Opportunity) {
+    setGenError(null);
+    const response = await fetch('/api/scripts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          topicId: topic.id,
+          duration: 45,
+          platforms: ['youtube', 'instagram'],
+          angle: topic.angle,
+        }),
+      }),
+      data = await response.json();
+    if (!response.ok) {
+      setGenError({
+        id: topic.id,
+        text: data.error || 'Bro could not generate a script for this idea.',
+      });
+      return;
+    }
+    sessionStorage.setItem(FOCUS_SCRIPT_KEY, data.id);
+    location.hash = 'Scripts';
+  }
   return (
     <Surface
       title="Topic opportunities"
@@ -170,6 +206,18 @@ function Ideas() {
                   </div>
                 </dl>
                 {x.caveat && <small>{x.caveat}</small>}
+                <button
+                  className="idea-generate-script"
+                  onClick={() => generateScript(x)}
+                  disabled={isBusy(x.id)}
+                  data-busy={isBusy(x.id)}
+                >
+                  <FileText />
+                  Generate script
+                </button>
+                {genError?.id === x.id && (
+                  <small className="idea-generate-error">{genError.text}</small>
+                )}
               </div>
               <div className="op-score">
                 <strong>{x.score}</strong>
@@ -222,7 +270,9 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
     });
   }
   useEffect(() => {
-    void load(focusScriptId);
+    const sessionFocusId = sessionStorage.getItem(FOCUS_SCRIPT_KEY);
+    if (sessionFocusId) sessionStorage.removeItem(FOCUS_SCRIPT_KEY);
+    void load(sessionFocusId || focusScriptId);
   }, [focusScriptId]);
   async function create() {
     await run('create', createScript);
