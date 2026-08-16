@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertCircle,
   ArrowRight,
   CalendarDays,
   CheckCircle2,
@@ -13,7 +12,6 @@ import {
   Link2,
   MessageCircle,
   Mic,
-  RefreshCw,
   Settings,
   Sparkles,
   TrendingUp,
@@ -58,14 +56,6 @@ type HomeData = {
     provider: string;
     accountName?: string;
     status?: string;
-  }>;
-  failedJobs: Array<{
-    id: string;
-    resourceId?: string | null;
-    kind: string;
-    state: string;
-    lastErrorMessage?: string;
-    updatedAt: string;
   }>;
 };
 type ChatMessage = {
@@ -121,7 +111,6 @@ export function Dashboard() {
             ? data.opportunities
             : [],
           connections: Array.isArray(data.connections) ? data.connections : [],
-          failedJobs: Array.isArray(data.failedJobs) ? data.failedJobs : [],
         } as HomeData;
         setHome(safe);
         setDemoMode(safe.mode === 'demo');
@@ -188,7 +177,6 @@ export function Dashboard() {
           mode: 'live',
           opportunities: [],
           connections: [],
-          failedJobs: [],
         });
         setNotice(
           error instanceof Error
@@ -262,19 +250,6 @@ export function Dashboard() {
         : data.error
     );
     if (response.ok) setConfirmation(null);
-    setBusy(false);
-  }
-  async function retryPublish(jobId: string) {
-    setBusy(true);
-    const response = await fetch(`/api/publish/${jobId}/retry`, {
-        method: 'POST',
-      }),
-      data = await response.json();
-    setNotice(
-      response.ok
-        ? `Retry queued for ${data.retriedProviders.join(' + ')} only.`
-        : data.error
-    );
     setBusy(false);
   }
   async function toggleRecording() {
@@ -551,42 +526,6 @@ export function Dashboard() {
                   </p>
                 )}
               </div>
-              <div className="section-head attention-head">
-                <h2>Needs attention</h2>
-                <button>
-                  View all <ArrowRight />
-                </button>
-              </div>
-              {home?.failedJobs?.[0] ? (
-                <article className="attention">
-                  <AlertCircle />
-                  <div>
-                    <strong>
-                      {home.failedJobs[0].lastErrorMessage ||
-                        'Job needs attention'}
-                    </strong>
-                    <span>{home.failedJobs[0].kind}</span>
-                    <small>
-                      {new Date(home.failedJobs[0].updatedAt).toLocaleString()}
-                    </small>
-                  </div>
-                  {home.failedJobs[0].kind === 'publish-video' &&
-                  home.failedJobs[0].state === 'failed_retryable' &&
-                  home.failedJobs[0].resourceId ? (
-                    <button
-                      onClick={() =>
-                        retryPublish(home.failedJobs[0]!.resourceId!)
-                      }
-                      disabled={busy}
-                      data-busy={busy}
-                    >
-                      Retry <RefreshCw />
-                    </button>
-                  ) : null}
-                </article>
-              ) : (
-                <p className="all-clear">No failed jobs need attention.</p>
-              )}
               <div className="suggestions">
                 <h2>Try asking Bro</h2>
                 <button

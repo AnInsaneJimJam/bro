@@ -967,8 +967,7 @@ header p {
   margin-top: 29px;
 }
 .progress-row,
-.schedule-row,
-.attention {
+.schedule-row {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 17px;
@@ -1008,7 +1007,6 @@ header p {
   border-radius: 9px;
 }
 .progress-row button,
-.attention button,
 .empty-page button {
   background: #fff;
   border: 1px solid #d5d5d8;
@@ -1020,7 +1018,6 @@ header p {
   align-items: center;
 }
 .progress-row button svg,
-.attention button svg,
 .empty-page button svg {
   width: 15px;
 }
@@ -1108,33 +1105,6 @@ header p {
 }
 .connection > svg {
   width: 14px;
-}
-.attention-head {
-  margin-top: 28px;
-}
-.attention {
-  align-items: flex-start;
-}
-.attention > svg {
-  color: var(--coral);
-  fill: #fff0ee;
-}
-.attention > div {
-  display: grid;
-  gap: 6px;
-  flex: 1;
-}
-.attention strong {
-  font-size: 13px;
-}
-.attention span,
-.attention small {
-  font-size: 11px;
-  color: var(--muted);
-}
-.attention button {
-  font-size: 11px;
-  padding: 7px;
 }
 .suggestions {
   margin-top: 27px;
@@ -1267,9 +1237,6 @@ header p {
   .connections {
     grid-row: 2 / span 2;
   }
-  .attention-head {
-    margin-top: 0;
-  }
   .suggestions {
     margin-top: 0;
   }
@@ -1317,7 +1284,6 @@ header p {
     display: block;
     margin-top: 28px;
   }
-  .attention-head,
   .suggestions {
     margin-top: 26px;
   }
