@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileText,
   Film,
+  Pencil,
   Instagram,
   Plus,
   RefreshCw,
@@ -239,8 +240,12 @@ function Ideas() {
 function Scripts({ focusScriptId }: { focusScriptId?: string }) {
   const [items, setItems] = useState<Script[]>([]),
     [selected, setSelected] = useState<Script | null>(null),
+    [mode, setMode] = useState<'read' | 'edit'>('read'),
     [message, setMessage] = useState(''),
     { isBusy, run } = useBusy();
+  useEffect(() => {
+    setMode('read');
+  }, [selected?.id]);
   async function load(preferredId?: string) {
     const r = await fetch('/api/scripts'),
       d = await r.json();
@@ -325,6 +330,7 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
       s = await r.json();
     if (r.ok) {
       setSelected(s);
+      setMode('read');
       setMessage(`Saved version ${s.version}`);
       load();
     } else setMessage(s.error);
@@ -439,8 +445,53 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
           )}
         </aside>
         <section className="script-editor">
-          {selected ? (
+          {selected && mode === 'read' ? (
+            <div className="script-read">
+              <header className="script-read-head">
+                <div>
+                  <h2>{selected.title}</h2>
+                  <span>
+                    {selected.duration}s · version {selected.version}
+                  </span>
+                </div>
+                <div className="script-read-actions">
+                  <button onClick={() => setMode('edit')}>
+                    <Pencil />
+                    Edit
+                  </button>
+                  <button
+                    onClick={duplicate}
+                    disabled={isBusy('duplicate')}
+                    data-busy={isBusy('duplicate')}
+                  >
+                    Duplicate script
+                  </button>
+                </div>
+              </header>
+              <div className="script-beat">
+                <span className="script-beat-label">Hook</span>
+                <p>{selected.hook}</p>
+              </div>
+              {selected.beats.map((beat, i) => (
+                <div className="script-beat" key={i}>
+                  <span className="script-beat-label">{beat.label}</span>
+                  <p>{beat.spoken}</p>
+                </div>
+              ))}
+              <div className="script-beat">
+                <span className="script-beat-label">CTA</span>
+                <p>{selected.cta}</p>
+              </div>
+              {message && <small>{message}</small>}
+            </div>
+          ) : selected ? (
             <>
+              <div className="script-edit-head">
+                <button type="button" onClick={() => setMode('read')}>
+                  <ChevronLeft />
+                  Back to read view
+                </button>
+              </div>
               <label>
                 Working title
                 <input
@@ -460,6 +511,7 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
                 />
                 <button
                   type="button"
+                  className="regenerate-link"
                   onClick={() => regenerate('hook')}
                   disabled={isBusy('regenerate-hook-')}
                   data-busy={isBusy('regenerate-hook-')}
@@ -483,6 +535,7 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
                   />
                   <button
                     type="button"
+                    className="regenerate-link"
                     onClick={() => regenerate('beat', i)}
                     disabled={isBusy(`regenerate-beat-${i}`)}
                     data-busy={isBusy(`regenerate-beat-${i}`)}
@@ -501,6 +554,7 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
                 />
                 <button
                   type="button"
+                  className="regenerate-link"
                   onClick={() => regenerate('cta')}
                   disabled={isBusy('regenerate-cta-')}
                   data-busy={isBusy('regenerate-cta-')}
@@ -515,13 +569,6 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
               >
                 <Save />
                 Save new version
-              </button>
-              <button
-                onClick={duplicate}
-                disabled={isBusy('duplicate')}
-                data-busy={isBusy('duplicate')}
-              >
-                Duplicate script
               </button>
               {message && <small>{message}</small>}
             </>

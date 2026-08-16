@@ -1808,6 +1808,95 @@ header p {
   place-items: center;
   color: var(--muted);
 }
+.regenerate-link {
+  justify-self: start;
+  border: 0 !important;
+  background: none !important;
+  color: var(--coral) !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.script-edit-head {
+  margin-bottom: 4px;
+}
+.script-edit-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+.script-edit-head svg {
+  width: 15px;
+  height: 15px;
+}
+.script-read {
+  display: grid;
+  gap: 22px;
+}
+.script-read-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.script-read-head h2 {
+  font:
+    700 22px/1.3 Georgia,
+    serif;
+  margin: 0 0 6px;
+}
+.script-read-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.script-read-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.script-read-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.script-read-actions svg {
+  width: 13px;
+  height: 13px;
+}
+.script-beat {
+  display: grid;
+  gap: 6px;
+}
+.script-beat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.script-beat p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
 .publish-workspace {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
