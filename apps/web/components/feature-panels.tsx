@@ -93,7 +93,7 @@ export function FeaturePanel({
 }) {
   if (active === 'Ideas') return <Ideas />;
   if (active === 'Scripts') return <Scripts focusScriptId={focusScriptId} />;
-  if (active === 'Videos') return <Videos />;
+  if (active === 'Upload') return <Videos />;
   if (active === 'My Videos') return <MyVideos />;
   if (active === 'Calendar') return <Calendar />;
   if (active === 'Comments') return <Comments />;
@@ -492,7 +492,9 @@ function Videos() {
     metadataRequested = useRef(new Set<string>()),
     [projectId, setProjectId] = useState(''),
     [projectState, setProjectState] = useState(''),
-    [status, setStatus] = useState('Loading your latest video project…'),
+    [status, setStatus] = useState(
+      'Upload a video to publish it to YouTube and Instagram.'
+    ),
     [uploading, setUploading] = useState(false),
     [drafting, setDrafting] = useState(false),
     [refreshing, setRefreshing] = useState(false),
@@ -511,7 +513,6 @@ function Videos() {
     >('unlisted'),
     [instagramCaption, setInstagramCaption] = useState('');
   useEffect(() => {
-    void loadLatestProject();
     void loadConnections();
   }, []);
   useEffect(() => {
@@ -539,21 +540,6 @@ function Videos() {
     }, 3000);
     return () => window.clearInterval(timer);
   }, [projectId, projectState, metadataReady]);
-  async function loadLatestProject() {
-    const response = await fetch('/api/videos?limit=1'),
-      projects = await response.json();
-    if (!response.ok) {
-      setStatus(projects.error || 'Could not load video projects.');
-      return;
-    }
-    const latest = Array.isArray(projects) ? projects[0] : undefined;
-    if (!latest) {
-      setStatus('Upload a video to publish it to YouTube and Instagram.');
-      return;
-    }
-    setProjectId(latest.id);
-    await refresh(latest.id);
-  }
   async function loadConnections() {
     try {
       const response = await fetch('/api/connections');
@@ -899,7 +885,7 @@ function Videos() {
               <video ref={video} src={preview} controls playsInline />
             ) : (
               <div className="video-empty">
-                <strong>9:16</strong>
+                <VerticalVideoGlyph />
                 <span>Upload a vertical video to preview it here.</span>
               </div>
             )}
@@ -1079,6 +1065,36 @@ function Videos() {
     </Surface>
   );
 }
+function VerticalVideoGlyph() {
+  return (
+    <svg
+      className="vertical-video-glyph"
+      viewBox="0 0 64 96"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="4"
+        y="2"
+        width="56"
+        height="92"
+        rx="12"
+        stroke="currentColor"
+        strokeWidth="3"
+      />
+      <rect x="24" y="7" width="16" height="4" rx="2" fill="currentColor" />
+      <circle
+        cx="32"
+        cy="50"
+        r="17"
+        stroke="currentColor"
+        strokeWidth="3"
+        opacity="0.5"
+      />
+      <path d="M27 41.5v17l15-8.5-15-8.5z" fill="currentColor" />
+    </svg>
+  );
+}
 const videoStateLabels: Record<string, string> = {
   queued: 'Queued',
   uploaded: 'Uploaded',
@@ -1140,9 +1156,9 @@ function MyVideos() {
         <p>Loading your videos…</p>
       ) : projects.length === 0 ? (
         <div className="video-library-empty">
-          <Film />
+          <VerticalVideoGlyph />
           <p>
-            No videos yet. Upload one in Videos and Bro will draft its post
+            No videos yet. Upload one in Upload and Bro will draft its post
             fields automatically.
           </p>
         </div>
@@ -1158,18 +1174,18 @@ function MyVideos() {
                   {preview ? (
                     <video src={preview} muted preload="metadata" />
                   ) : (
-                    <Film />
+                    <VerticalVideoGlyph />
                   )}
+                  <span
+                    className={`video-card-state ${project.state === 'failed' ? 'error' : ''}`}
+                  >
+                    {videoStateLabels[project.state] || project.state}
+                  </span>
                 </div>
                 <div className="video-card-body">
-                  <div className="video-card-head">
-                    <strong>{draft?.title || filename}</strong>
-                    <span
-                      className={`video-card-state ${project.state === 'failed' ? 'error' : ''}`}
-                    >
-                      {videoStateLabels[project.state] || project.state}
-                    </span>
-                  </div>
+                  <strong className="video-card-title">
+                    {draft?.title || filename}
+                  </strong>
                   {draft ? (
                     <>
                       <p className="video-card-desc">{draft.description}</p>

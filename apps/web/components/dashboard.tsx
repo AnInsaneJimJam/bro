@@ -29,7 +29,7 @@ const nav = [
   [MessageCircle, 'Bro Chat'],
   [Lightbulb, 'Ideas'],
   [FileText, 'Scripts'],
-  [Clapperboard, 'Videos'],
+  [Clapperboard, 'Upload'],
   [Film, 'My Videos'],
   [CalendarDays, 'Calendar'],
   [MessageCircle, 'Comments'],
