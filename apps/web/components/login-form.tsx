@@ -29,9 +29,13 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
         body: JSON.stringify({ email }),
       });
       const data = await response.json();
-      setMessage(data.message || data.error || 'Unable to send the magic link.');
+      setMessage(
+        data.message || data.error || 'Unable to send the magic link.'
+      );
     } catch {
-      setMessage('Unable to send the magic link. Check your connection and try again.');
+      setMessage(
+        'Unable to send the magic link. Check your connection and try again.'
+      );
     } finally {
       setBusy(false);
     }
@@ -89,6 +93,7 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
               className="google-login"
               type="button"
               disabled={busy}
+              data-busy={busy}
               onClick={googleAuth}
             >
               <span className="google-mark" aria-hidden="true">
@@ -134,13 +139,14 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
             />
           </label>
           <div className="password-auth-actions">
-            <button disabled={busy}>
+            <button disabled={busy} data-busy={busy}>
               Sign in <ArrowRight />
             </button>
             <button
               className="secondary-login"
               type="button"
               disabled={busy}
+              data-busy={busy}
               onClick={() => passwordAuth('sign_up')}
             >
               Create account
@@ -157,6 +163,7 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
             className="secondary-login"
             type="button"
             disabled={busy || !email}
+            data-busy={busy}
             onClick={magicLink}
           >
             Email me a magic link

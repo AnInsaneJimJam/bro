@@ -8,6 +8,80 @@
   --warn: #d9553d;
 }
 
+/*
+ * Every clickable control gives the same three signals: a hover lift, an
+ * instant press-down on click, and (via [data-busy]) a spinner + lock while
+ * an async action is in flight. One rule here beats restyling each button.
+ */
+button,
+.landing-button,
+a.primary-link {
+  transition:
+    transform 0.08s ease,
+    filter 0.08s ease,
+    opacity 0.08s ease,
+    box-shadow 0.15s ease;
+}
+button:enabled:hover,
+.landing-button:hover,
+a.primary-link:hover {
+  filter: brightness(0.96);
+}
+button:enabled:active,
+.landing-button:active,
+a.primary-link:active {
+  transform: scale(0.97);
+  filter: brightness(0.91);
+}
+button:focus-visible,
+.landing-button:focus-visible,
+a.primary-link:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: none;
+  transform: none;
+}
+button[data-busy='true'] {
+  cursor: progress;
+  pointer-events: none;
+  position: relative;
+  font-size: 0;
+}
+button[data-busy='true'] > * {
+  opacity: 0;
+}
+button[data-busy='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.7;
+  animation: btn-spin 0.6s linear infinite;
+}
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .landing-button,
+  a.primary-link,
+  button[data-busy='true']::after {
+    transition: none;
+    animation-duration: 0.001ms;
+  }
+}
+
 /* Public landing page */
 .landing {
   min-height: 100vh;
@@ -2222,6 +2296,19 @@ header p {
   width: 45px !important;
   border-radius: 25px !important;
   padding: 3px !important;
+}
+/* Too small for the spinner overlay; a dimmed, inert pill is feedback enough. */
+.switch[data-busy='true'] {
+  font-size: inherit;
+}
+.switch[data-busy='true'] > * {
+  opacity: 1;
+}
+.switch[data-busy='true']::after {
+  content: none;
+}
+.switch[data-busy='true'] i {
+  opacity: 0.5;
 }
 .switch i {
   width: 18px;

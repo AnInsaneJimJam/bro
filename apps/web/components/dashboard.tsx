@@ -577,6 +577,8 @@ export function Dashboard() {
                       onClick={() =>
                         retryPublish(home.failedJobs[0]!.resourceId!)
                       }
+                      disabled={busy}
+                      data-busy={busy}
                     >
                       Retry <RefreshCw />
                     </button>
@@ -662,6 +664,7 @@ export function Dashboard() {
               <button
                 className="confirm"
                 disabled={busy}
+                data-busy={busy}
                 onClick={confirmPublish}
               >
                 Confirm &amp; queue
@@ -688,9 +691,10 @@ export function Dashboard() {
           <button
             className="send"
             disabled={busy || recording}
+            data-busy={busy}
             onClick={submit}
           >
-            {busy ? 'Working…' : 'Send'}
+            Send
           </button>
         </div>
       </section>

@@ -56,6 +56,24 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
 };
+/**
+ * Tracks which named action is in flight so a button can show a spinner
+ * (via data-busy) instead of leaving a click with no visible response.
+ */
+function useBusy() {
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  return {
+    isBusy: (key: string) => busyKey === key,
+    run: async (key: string, action: () => Promise<void>) => {
+      setBusyKey(key);
+      try {
+        await action();
+      } finally {
+        setBusyKey(null);
+      }
+    },
+  };
+}
 export function FeaturePanel({
   active,
   chatMessages,
@@ -107,7 +125,11 @@ function Ideas() {
       title="Topic opportunities"
       subtitle="Evidence-backed signals for your confirmed niche and country."
       action={
-        <button onClick={() => load(true)}>
+        <button
+          onClick={() => load(true)}
+          disabled={loading}
+          data-busy={loading}
+        >
           <RefreshCw />
           Refresh official signals
         </button>
@@ -162,7 +184,8 @@ function Ideas() {
 function Scripts({ focusScriptId }: { focusScriptId?: string }) {
   const [items, setItems] = useState<Script[]>([]),
     [selected, setSelected] = useState<Script | null>(null),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    { isBusy, run } = useBusy();
   async function load(preferredId?: string) {
     const r = await fetch('/api/scripts'),
       d = await r.json();
@@ -195,6 +218,9 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
     void load(focusScriptId);
   }, [focusScriptId]);
   async function create() {
+    await run('create', createScript);
+  }
+  async function createScript() {
     const opportunityResponse = await fetch('/api/opportunities?count=5'),
       opportunities = await opportunityResponse.json(),
       topicId = opportunities.items?.[0]?.id;
@@ -221,6 +247,10 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
   }
   async function save() {
     if (!selected) return;
+    await run('save', saveScript);
+  }
+  async function saveScript() {
+    if (!selected) return;
     const r = await fetch('/api/scripts', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -244,6 +274,10 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
   }
   async function duplicate() {
     if (!selected) return;
+    await run('duplicate', duplicateScript);
+  }
+  async function duplicateScript() {
+    if (!selected) return;
     const response = await fetch(`/api/scripts/${selected.id}/duplicate`, {
         method: 'POST',
       }),
@@ -261,6 +295,16 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
     if (!selected) return;
     const instruction = prompt('How should Bro rewrite this section?');
     if (!instruction) return;
+    await run(`regenerate-${section}-${beatIndex ?? ''}`, async () =>
+      regenerateSection(section, instruction, beatIndex)
+    );
+  }
+  async function regenerateSection(
+    section: 'hook' | 'beat' | 'cta',
+    instruction: string,
+    beatIndex?: number
+  ) {
+    if (!selected) return;
     const response = await fetch(`/api/scripts/${selected.id}/regenerate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -295,7 +339,11 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
       title="Scripts"
       subtitle="Versioned scripts for 15–60 second vertical videos."
       action={
-        <button onClick={create}>
+        <button
+          onClick={create}
+          disabled={isBusy('create')}
+          data-busy={isBusy('create')}
+        >
           <Plus />
           New 45s draft
         </button>
@@ -353,7 +401,12 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
                     setSelected({ ...selected, hook: e.target.value })
                   }
                 />
-                <button type="button" onClick={() => regenerate('hook')}>
+                <button
+                  type="button"
+                  onClick={() => regenerate('hook')}
+                  disabled={isBusy('regenerate-hook-')}
+                  data-busy={isBusy('regenerate-hook-')}
+                >
                   Regenerate hook
                 </button>
               </label>
@@ -371,7 +424,12 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
                       })
                     }
                   />
-                  <button type="button" onClick={() => regenerate('beat', i)}>
+                  <button
+                    type="button"
+                    onClick={() => regenerate('beat', i)}
+                    disabled={isBusy(`regenerate-beat-${i}`)}
+                    data-busy={isBusy(`regenerate-beat-${i}`)}
+                  >
                     Regenerate beat
                   </button>
                 </label>
@@ -384,15 +442,30 @@ function Scripts({ focusScriptId }: { focusScriptId?: string }) {
                     setSelected({ ...selected, cta: e.target.value })
                   }
                 />
-                <button type="button" onClick={() => regenerate('cta')}>
+                <button
+                  type="button"
+                  onClick={() => regenerate('cta')}
+                  disabled={isBusy('regenerate-cta-')}
+                  data-busy={isBusy('regenerate-cta-')}
+                >
                   Regenerate CTA
                 </button>
               </label>
-              <button onClick={save}>
+              <button
+                onClick={save}
+                disabled={isBusy('save')}
+                data-busy={isBusy('save')}
+              >
                 <Save />
                 Save new version
               </button>
-              <button onClick={duplicate}>Duplicate script</button>
+              <button
+                onClick={duplicate}
+                disabled={isBusy('duplicate')}
+                data-busy={isBusy('duplicate')}
+              >
+                Duplicate script
+              </button>
               {message && <small>{message}</small>}
             </>
           ) : (
@@ -415,6 +488,9 @@ function Videos() {
     [status, setStatus] = useState('Loading your latest video project…'),
     [uploading, setUploading] = useState(false),
     [drafting, setDrafting] = useState(false),
+    [refreshing, setRefreshing] = useState(false),
+    [retrying, setRetrying] = useState(false),
+    [publishing, setPublishing] = useState(false),
     [metadataReady, setMetadataReady] = useState(false),
     [preview, setPreview] = useState(''),
     [connections, setConnections] = useState<ConnectionSummary[]>([]),
@@ -704,6 +780,14 @@ function Videos() {
     );
   }
   async function publishNow() {
+    setPublishing(true);
+    try {
+      await publish();
+    } finally {
+      setPublishing(false);
+    }
+  }
+  async function publish() {
     if (!projectId) {
       setStatus('Upload and validate a video first.');
       return;
@@ -790,9 +874,13 @@ function Videos() {
             accept="video/mp4,video/quicktime,video/webm"
             onChange={(e) => upload(e.target.files?.[0])}
           />
-          <button onClick={() => input.current?.click()}>
+          <button
+            onClick={() => input.current?.click()}
+            disabled={uploading}
+            data-busy={uploading}
+          >
             <Upload />
-            {uploading ? 'Uploading…' : 'Upload video'}
+            Upload video
           </button>
         </>
       }
@@ -815,13 +903,35 @@ function Videos() {
           </div>
           <div className="video-actions">
             {projectId && projectId !== 'demo' && (
-              <button onClick={() => refresh()}>
+              <button
+                onClick={async () => {
+                  setRefreshing(true);
+                  try {
+                    await refresh();
+                  } finally {
+                    setRefreshing(false);
+                  }
+                }}
+                disabled={refreshing}
+                data-busy={refreshing}
+              >
                 <RefreshCw />
                 Refresh status
               </button>
             )}
             {projectId && projectId !== 'demo' && projectState === 'failed' && (
-              <button onClick={retryValidation}>
+              <button
+                onClick={async () => {
+                  setRetrying(true);
+                  try {
+                    await retryValidation();
+                  } finally {
+                    setRetrying(false);
+                  }
+                }}
+                disabled={retrying}
+                data-busy={retrying}
+              >
                 <RefreshCw />
                 Retry processing
               </button>
@@ -942,8 +1052,13 @@ function Videos() {
               className="primary-small"
               onClick={publishNow}
               disabled={
-                !projectId || projectState !== 'ready' || drafting || uploading
+                !projectId ||
+                projectState !== 'ready' ||
+                drafting ||
+                uploading ||
+                publishing
               }
+              data-busy={publishing}
             >
               Publish now
             </button>
@@ -1000,7 +1115,8 @@ function Calendar() {
       'public' | 'unlisted' | 'private'
     >('unlisted'),
     [instagramCaption, setInstagramCaption] = useState(''),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    [scheduling, setScheduling] = useState(false);
   async function load() {
     const [start, end] = [
         new Date(cursor.getFullYear(), cursor.getMonth(), 1),
@@ -1028,6 +1144,14 @@ function Calendar() {
     load();
   }, [cursor]);
   async function schedule() {
+    setScheduling(true);
+    try {
+      await scheduleJob();
+    } finally {
+      setScheduling(false);
+    }
+  }
+  async function scheduleJob() {
     const providers = Object.entries(destinations)
       .filter(([, enabled]) => enabled)
       .map(([provider]) => provider);
@@ -1299,7 +1423,9 @@ function Calendar() {
             />
           </label>
         )}
-        <button onClick={schedule}>Review schedule</button>
+        <button onClick={schedule} disabled={scheduling} data-busy={scheduling}>
+          Review schedule
+        </button>
       </div>
       {message && <small>{message}</small>}
     </Surface>
@@ -1353,7 +1479,8 @@ function Comments() {
     [analysis, setAnalysis] = useState<Analysis | null>(null),
     [sample, setSample] = useState(0),
     [lastSync, setLastSync] = useState<string | undefined>(),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    { isBusy, run } = useBusy();
   async function refreshList() {
     const params = new URLSearchParams();
     if (platform !== 'all') params.set('platform', platform);
@@ -1369,6 +1496,9 @@ function Comments() {
     refreshList();
   }, [platform, keyword, date]);
   async function sync() {
+    await run('sync', syncComments);
+  }
+  async function syncComments() {
     const providers =
       platform === 'all' ? ['youtube', 'instagram'] : [platform];
     const response = await fetch('/api/comments', {
@@ -1382,6 +1512,9 @@ function Comments() {
     );
   }
   async function analyze() {
+    await run('analyze', analyzeComments);
+  }
+  async function analyzeComments() {
     const filters: {
       platforms?: string[];
       from?: string;
@@ -1409,7 +1542,11 @@ function Comments() {
       title="Comments"
       subtitle={`${sample} stored comments${lastSync ? ` · last sync ${new Date(lastSync).toLocaleString()}` : ''}.`}
       action={
-        <button onClick={sync}>
+        <button
+          onClick={sync}
+          disabled={isBusy('sync')}
+          data-busy={isBusy('sync')}
+        >
           <RefreshCw />
           Sync owned media
         </button>
@@ -1438,7 +1575,13 @@ function Comments() {
           onChange={(e) => setQuestion(e.target.value)}
           aria-label="Analysis question"
         />
-        <button onClick={analyze}>Analyze selected comments</button>
+        <button
+          onClick={analyze}
+          disabled={isBusy('analyze')}
+          data-busy={isBusy('analyze')}
+        >
+          Analyze selected comments
+        </button>
       </div>
       {analysis && (
         <div className="analysis">
@@ -1492,7 +1635,8 @@ function Connections() {
     demo?: boolean;
   };
   const [connections, setConnections] = useState<Connection[]>([]),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    { isBusy, run } = useBusy();
   async function load() {
     const response = await fetch('/api/connections'),
       data = await response.json();
@@ -1509,6 +1653,9 @@ function Connections() {
       )
     )
       return;
+    await run(`disconnect-${provider}`, () => disconnectProvider(provider));
+  }
+  async function disconnectProvider(provider: Connection['provider']) {
     const response = await fetch('/api/connections', {
         method: 'DELETE',
         headers: { 'content-type': 'application/json' },
@@ -1519,6 +1666,9 @@ function Connections() {
     load();
   }
   async function syncConnection(provider: Connection['provider']) {
+    await run(`sync-${provider}`, () => syncProviderContent(provider));
+  }
+  async function syncProviderContent(provider: Connection['provider']) {
     const response = await fetch('/api/sync/content', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1615,7 +1765,11 @@ function Connections() {
               <div>
                 {connection && !connection.demo ? (
                   <>
-                    <button onClick={() => syncConnection(provider)}>
+                    <button
+                      onClick={() => syncConnection(provider)}
+                      disabled={isBusy(`sync-${provider}`)}
+                      data-busy={isBusy(`sync-${provider}`)}
+                    >
                       Sync now
                       <RefreshCw />
                     </button>
@@ -1627,7 +1781,11 @@ function Connections() {
                       Reconnect
                       <ExternalLink />
                     </button>
-                    <button onClick={() => disconnect(provider)}>
+                    <button
+                      onClick={() => disconnect(provider)}
+                      disabled={isBusy(`disconnect-${provider}`)}
+                      data-busy={isBusy(`disconnect-${provider}`)}
+                    >
                       Disconnect
                     </button>
                   </>
@@ -1659,7 +1817,8 @@ function Settings() {
   };
   const [values, setValues] = useState({ youtube: false, instagram: false }),
     [checks, setChecks] = useState<Check[]>([]),
-    [message, setMessage] = useState('');
+    [message, setMessage] = useState(''),
+    { isBusy, run } = useBusy();
   useEffect(() => {
     fetch('/api/settings/auto-publish')
       .then((r) => r.json())
@@ -1706,6 +1865,9 @@ function Settings() {
       !confirm('Final confirmation: permanently delete all Bro account data?')
     )
       return;
+    await run('delete-account', deleteAccountData);
+  }
+  async function deleteAccountData() {
     const response = await fetch('/api/account', { method: 'DELETE' }),
       data = await response.json();
     if (response.ok) {
@@ -1718,6 +1880,9 @@ function Settings() {
     } else setMessage(data.error);
   }
   async function signOut() {
+    await run('sign-out', signOutSession);
+  }
+  async function signOutSession() {
     const response = await fetch('/api/auth/signout', { method: 'POST' }),
       data = await response.json();
     if (response.ok) location.href = '/login';
@@ -1762,22 +1927,36 @@ function Settings() {
         <Toggle
           name="YouTube"
           value={values.youtube}
-          set={(v) => change('youtube', v)}
+          busy={isBusy('toggle-youtube')}
+          set={(v) => run('toggle-youtube', () => change('youtube', v))}
         />
         <Toggle
           name="Instagram"
           value={values.instagram}
-          set={(v) => change('instagram', v)}
+          busy={isBusy('toggle-instagram')}
+          set={(v) => run('toggle-instagram', () => change('instagram', v))}
         />
         {message && <small>{message}</small>}
       </section>
       <section className="settings-section">
         <h3>Session</h3>
-        <button onClick={signOut}>Sign out of Bro</button>
+        <button
+          onClick={signOut}
+          disabled={isBusy('sign-out')}
+          data-busy={isBusy('sign-out')}
+        >
+          Sign out of Bro
+        </button>
       </section>
       <section className="settings-section">
         <h3>Privacy</h3>
-        <button onClick={deleteAccount}>Delete account and data</button>
+        <button
+          onClick={deleteAccount}
+          disabled={isBusy('delete-account')}
+          data-busy={isBusy('delete-account')}
+        >
+          Delete account and data
+        </button>
         <a href="/privacy">Read privacy notice</a>
       </section>
     </Surface>
@@ -1786,10 +1965,12 @@ function Settings() {
 function Toggle({
   name,
   value,
+  busy,
   set,
 }: {
   name: string;
   value: boolean;
+  busy?: boolean;
   set: (v: boolean) => void | Promise<void>;
 }) {
   return (
@@ -1803,6 +1984,8 @@ function Toggle({
         aria-pressed={value}
         className={value ? 'switch on' : 'switch'}
         onClick={() => set(!value)}
+        disabled={busy}
+        data-busy={busy}
       >
         <i />
       </button>
