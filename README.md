@@ -1,45 +1,90 @@
 # Bro
 
-Bro is a desktop-optimized responsive content manager for solo creators publishing English YouTube Shorts and Instagram Reels. It covers account connection, evidence-backed niche inference and topic opportunities, versioned short-form scripts, signed video uploads, direct multi-platform publishing, durable scheduling, and grounded analysis of owned-media comments. Subtitle generation and burn-in remain implemented as a later editing slice and do not block publishing.
+**A creator command center for solo YouTube Shorts and Instagram Reels publishers.**
 
-Demo mode is visually labeled, never calls social platforms, and never reports a fake live publish.
+![Node](https://img.shields.io/badge/node-22-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js&logoColor=white)
+![pnpm](https://img.shields.io/badge/pnpm-10-F69220?logo=pnpm&logoColor=white)
+![Postgres](https://img.shields.io/badge/Postgres-16-4169E1?logo=postgresql&logoColor=white)
 
-## Repository layout
+Bro turns "I have a video" into "it's published" — one connected workspace for
+finding a topic, drafting a script, uploading or recording the clip, drafting
+its title/description/caption from the spoken audio, captioning it, and
+publishing or scheduling it to YouTube and Instagram, with a chat assistant
+that can drive the whole flow in plain English.
 
-- `apps/web` — Next.js App Router UI, Supabase authentication, owned API routes, chat/audio commands, OAuth callbacks.
-- `apps/worker` — long-running pg-boss worker for content/comment sync, transcription, rendering, and publishing.
-- `packages/db` — Drizzle schema, migrations, inherited RLS policies, typed access, optional demo seed.
-- `packages/core` — state machines, scheduling, authorization-safe validation, scoring, AES-256-GCM token encryption, redaction.
-- `packages/integrations` — official YouTube, Instagram, and feature-flagged Reddit adapters.
-- `packages/ai` — 18 strict application-tool schemas, OpenRouter/Gemini/Responses tool loops, and structured niche/script/opportunity/comment outputs.
-- `packages/video` — MIME/metadata validation, cue segmentation/edit operations, ASS generation, shell-free FFmpeg/ffprobe execution.
+> [!NOTE]
+> This is a hackathon project. Demo mode (`NEXT_PUBLIC_DEMO_MODE=true`) runs
+> the full UI against labeled sample data with **zero** calls to YouTube,
+> Instagram, or any AI provider, so anyone can try it without credentials.
 
-The model never receives OAuth tokens. Application routes validate ownership and policy; durable workers perform external side effects. Timestamps are stored in UTC while scheduling intent retains the user's IANA time zone.
+## Features
 
-## Hackathon demo in two commands
+- **Niche and topic discovery** — infers a creator's niche from synced owned
+  content with evidence and a confidence score, then scores time-bounded
+  topic opportunities for their niche and country.
+- **Versioned scripts** — generates 15–60s vertical-video scripts from a topic
+  (workspace-sourced or creator-supplied), with per-section regeneration and
+  full version history.
+- **Upload or record, then auto-draft** — upload a file or record straight
+  from the browser camera; once it validates, Bro transcribes the spoken
+  audio and drafts the YouTube title/description and Instagram caption for
+  the creator to review.
+- **English captions** — auto-generated from the same transcript, editable,
+  and burned into the video with FFmpeg on request; publishing automatically
+  uses the captioned render once one exists.
+- **Multi-platform publishing** — publish now or schedule to YouTube Shorts
+  and Instagram Reels independently, with durable delivery (pg-boss),
+  auto-publish policy gating, and per-destination retry so one platform's
+  failure never blocks the other.
+- **Calendar** — a real month view of every scheduled and past post, with
+  destination status and a link straight to the published result.
+- **Comment intelligence** — syncs comments from owned posts and answers
+  grounded questions about them, citing the exact comments it used.
+- **Bro Chat** — a typed or voice-driven assistant that calls the same 19
+  application tools as the UI (find topics, write a script, publish, schedule,
+  analyze comments, and more), aware of the creator's timezone and any draft
+  Bro already wrote so it doesn't ask for information it already has.
 
-The labeled demo workspace needs no database or social-platform credentials:
+## Architecture
+
+A pnpm/TypeScript monorepo. The browser never receives provider access
+tokens, AI keys, or the Supabase service-role key — those stay server-side or
+in the worker.
+
+| Package                 | Responsibility                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`              | Next.js App Router UI, Supabase auth, owned API routes, chat/audio commands, OAuth callbacks                                    |
+| `apps/worker`           | Durable [pg-boss](https://github.com/timgit/pg-boss) worker: content/comment sync, transcription, caption rendering, publishing |
+| `packages/db`           | Drizzle schema, migrations, row-level-security policies, typed access, demo seed                                                |
+| `packages/core`         | State machines, scheduling, authorization checks, scoring, AES-256-GCM token encryption                                         |
+| `packages/integrations` | Official YouTube, Instagram, and feature-flagged Reddit adapters                                                                |
+| `packages/ai`           | 19 strict Zod tool schemas, OpenRouter/Gemini/OpenAI tool loops, structured niche/script/comment outputs                        |
+| `packages/video`        | MIME/metadata validation, caption cue segmentation, ASS generation, shell-free FFmpeg/ffprobe execution                         |
+
+Timestamps are stored in UTC while a creator's scheduling intent retains
+their IANA time zone.
+
+## Quick start (demo mode)
+
+No database or platform credentials needed:
 
 ```bash
 pnpm install
-cp .env.example .env && pnpm dev
+cp .env.example .env
+pnpm dev
 ```
 
-Open `http://localhost:3000` and choose **Continue with labeled demo data**. Keep `NEXT_PUBLIC_DEMO_MODE=true`. Add `OPENROUTER_API_KEY` for Nemotron-backed niche, topics, scripts, comments, and typed chat. Recorded microphone commands still require `GEMINI_API_KEY` or `OPENAI_API_KEY` because OpenRouter/Nemotron is text-only.
+Open `http://localhost:3000` and choose **Continue with labeled demo data**.
+Everything — Home, Ideas, Scripts, Upload, Calendar, Comments, Bro Chat — runs
+against clearly labeled sample data. Nothing is ever sent to a real platform
+in this mode.
 
-Suggested three-minute walkthrough:
+## Local development (live data)
 
-1. Show the evidence-backed confirmed niche and open **Ideas** to refresh scored, country-scoped opportunities.
-2. Ask Bro: `Write a 45-second script for topic 2 with a contrarian hook`, then edit and save the generated script.
-3. Upload a video in **Videos**, enter separate YouTube title/description and Instagram caption metadata, and show the publish confirmation.
-4. Open **Calendar**, select the ready demo video, review the manual time slot, accept the confirmation, and point out the `scheduled · demo` card and no-platform-call notice.
-5. Open **Comments** and analyze what viewers are confused about, noting the sample size, approximate sentiment notice, and representative evidence.
-
-Demo mode never calls YouTube, Instagram, or Reddit. Calendar results are browser-local and explicitly labeled; they are not presented as live publishes.
-
-## Local setup
-
-Requirements: Node.js 22, pnpm 10, FFmpeg/ffprobe, PostgreSQL 16 or Supabase, and a Supabase project for live Auth/Storage.
+Requirements: Node.js 22, pnpm 10, FFmpeg/ffprobe, PostgreSQL 16 (or a
+Supabase project for live Auth/Storage).
 
 ```bash
 cp .env.example .env
@@ -50,36 +95,45 @@ pnpm --filter @bro/db db:seed   # optional, clearly labeled demo records
 pnpm dev
 ```
 
-In another terminal, start durable work:
+In a second terminal, start the durable worker (required for uploads,
+transcription, captions, sync, and publishing):
 
 ```bash
 pnpm dev:worker
 ```
 
-Open `http://localhost:3000`. For a platform-free demo, retain `NEXT_PUBLIC_DEMO_MODE=true`. External social side effects remain disabled; optional microphone transcription requires the configured speech provider.
+Set `NEXT_PUBLIC_DEMO_MODE=false` in `.env` once real credentials are
+configured (see below).
 
-### Real-data credential checklist
+### Provider configuration
 
-Set `NEXT_PUBLIC_DEMO_MODE=false` and provide these values in `.env`. Never commit that file or paste secrets into the browser:
+> [!WARNING]
+> Never commit `.env` or paste secrets into chat or the browser. `TOKEN_ENCRYPTION_KEY` and `OAUTH_STATE_SECRET` are generated locally — they are not third-party API keys.
 
-- **OpenRouter (preferred text/chat provider):** `OPENROUTER_API_KEY`, with `OPENROUTER_MODEL` defaulting to `nvidia/nemotron-3-ultra-550b-a55b:free`. `OPENROUTER_SCRIPT_MODEL`, `OPENROUTER_SITE_URL`, `OPENROUTER_APP_NAME`, and `OPENROUTER_TIMEOUT_MS` (default 45000) are optional. Bro uses Chat Completions tool calling and validates every structured result with Zod. Structured topic/script requests disable unnecessary reasoning and are bounded by the timeout; topic discovery can fall back to transparent direct signal cards and script creation to an editable deterministic draft when the free provider is unavailable. Nemotron is text-only; microphone commands still use Gemini or OpenAI.
-- **Gemini (optional audio/text fallback):** `GEMINI_API_KEY`. `GEMINI_TEXT_MODEL`, `GEMINI_SCRIPT_MODEL`, `GEMINI_COMMAND_TRANSCRIPTION_MODEL`, and `GEMINI_TRANSCRIPTION_MODEL` are configurable model names, not additional keys. Bro converts browser WebM recordings to WAV before sending short commands to Gemini and can read short uploaded-video audio for metadata drafting.
-- **Supabase:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the server-only `SUPABASE_SERVICE_ROLE_KEY`, plus `DATABASE_URL` and `DATABASE_DIRECT_URL` for its Postgres database.
-- **Bro security:** `TOKEN_ENCRYPTION_KEY` and `OAUTH_STATE_SECRET`, which you generate yourself; these are not third-party API keys.
-- **YouTube:** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from a Google Cloud Web OAuth client. No separate YouTube API key is needed for Bro's owned-channel, comment, and upload flows.
-- **Instagram:** `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` from Meta's direct Instagram Login setup. Live publishing and owned-media comments require a free Creator or Business professional account and the relevant Meta permissions/review; the official API does not support personal accounts for these features.
-- **Reddit (optional):** `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`; keep `REDDIT_INTEGRATION_ENABLED=false` until Reddit approves the intended use.
-- **Error reporting (optional):** `SENTRY_DSN`.
+| Provider          | Variables                                                                                                | Used for                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Supabase          | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` | Auth, private Storage, Postgres                                                             |
+| YouTube           | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                                                               | OAuth, owned-channel sync, resumable upload, comments                                       |
+| Instagram         | `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`                                                               | OAuth, Reels publishing, owned comments (Creator/Business accounts only)                    |
+| Groq              | `GROQ_API_KEY`                                                                                           | Preferred transcription provider — free Whisper, used for video captions and voice commands |
+| OpenRouter        | `OPENROUTER_API_KEY`                                                                                     | Preferred text provider — niche inference, topics, scripts, chat, comment analysis          |
+| Gemini / OpenAI   | `GEMINI_API_KEY` / `OPENAI_API_KEY`                                                                      | Fallback text and transcription providers                                                   |
+| Reddit (optional) | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`                                                               | Gated behind `REDDIT_INTEGRATION_ENABLED=false` until approved                              |
 
-Redirect URIs, scopes, API/model versions, bucket names, limits, and worker settings in `.env.example` are configuration rather than secrets, but they must match the corresponding provider console exactly.
+See `.env.example` for the complete list, including model names, redirect
+URIs, bucket names, and worker tuning — those are configuration, not secrets,
+but must match the corresponding provider console exactly.
 
 ### Supabase setup
 
-1. Create private buckets named `bro-originals`, `bro-audio`, and `bro-renders` (or change the environment names).
-2. Configure email magic-link authentication, enable the Google provider, and add `${NEXT_PUBLIC_APP_URL}/api/auth/callback` to allowed redirects. For Google sign-in, create/configure a Google OAuth web client with Supabase's callback URL (`https://<project-ref>.supabase.co/auth/v1/callback`) in Google Cloud, then paste its client ID and secret into Supabase Auth → Providers → Google. This Google login identifies the Bro user; the separate YouTube connection still uses Bro's YouTube OAuth flow.
-3. Apply `packages/db/migrations` to the Supabase Postgres database. The RLS policies use `auth.uid()` and scope both direct and inherited child records.
-4. Put the anonymous key only in `NEXT_PUBLIC_SUPABASE_ANON_KEY`; keep the service-role key server/worker-only.
-5. Generate `TOKEN_ENCRYPTION_KEY` with `openssl rand -base64 32`. Rotate by adding a new key version and re-encrypting stored connections before retiring the old key.
+1. Create private buckets `bro-originals`, `bro-audio`, and `bro-renders`.
+2. Enable email magic-link auth and the Google provider; add
+   `${NEXT_PUBLIC_APP_URL}/api/auth/callback` to allowed redirects.
+3. Apply `packages/db/migrations` — row-level-security policies scope every
+   row (direct and inherited) to `auth.uid()`.
+4. Keep the service-role key server/worker-only; only the anon key belongs in
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+5. Generate `TOKEN_ENCRYPTION_KEY` with `openssl rand -base64 32`.
 
 ## Verification
 
@@ -91,69 +145,56 @@ pnpm build
 pnpm format
 ```
 
-The Playwright suite starts the demo web server and exercises desktop Chrome plus a mobile viewport. System Chrome is used when available. Unit/integration coverage includes OAuth-state rejection, token encryption/redaction and refresh, niche validation, trend scoring/expiry, script conflicts, caption operations and command construction, malicious media rejection, DST conversion, idempotency, partial publishing, auto-publish policy, grounded comment citations, and provider adapter behavior.
-
-## Provider configuration and human review
-
-No provider password is requested or stored.
-
-### YouTube
-
-1. Enable YouTube Data API v3 in Google Cloud.
-2. Create a Web application OAuth client and register `GOOGLE_REDIRECT_URI` exactly.
-3. Configure the minimum scopes in `.env`; Bro currently needs owned-channel read, comment retrieval (`youtube.force-ssl`), and upload capabilities.
-4. Add test users during development. Complete OAuth verification before serving users outside the test list.
-5. Monitor quota: search, upload, and comment methods have different costs. Bro uses bounded/manual sync rather than aggressive polling.
-
-The adapter uses server-side OAuth, encrypted refresh tokens, quota/error mapping, and resumable upload. It has automated HTTP-contract tests but has not been verified against a real channel in this repository because credentials are not supplied.
-
-### Instagram
-
-1. Create a Meta app with **Instagram API with Instagram Login**, pin `INSTAGRAM_API_VERSION`, and register `INSTAGRAM_REDIRECT_URI`.
-2. Connect an eligible Instagram Creator or Business professional account. This direct flow does not require a linked Facebook Page.
-3. Request `instagram_business_basic`, `instagram_business_content_publish`, and `instagram_business_manage_comments`; submit the app and screencast for App Review.
-4. Configure Meta's data deletion URL and privacy-policy URL before public launch.
-
-Bro detects unsupported accounts, creates Reels containers close to execution, polls provider processing, and publishes via the official Graph API. Automated adapter-contract tests pass; live publishing still requires credentials, account eligibility, and review.
-
-### Reddit
-
-Set `REDDIT_INTEGRATION_ENABLED=false` until the intended use is approved under current Reddit terms. When approved, create a confidential web app with the exact redirect URI and a descriptive user agent. Bro reads only the connected user's bounded history and official hot/search signals; it does not publish, scrape, or use Reddit content for training.
-
-### AI providers
-
-Set `OPENROUTER_API_KEY` for live typed chat, structured text generation, niche inference, topic clustering, scripts, and comment analysis. Bro uses the OpenAI-compatible OpenRouter Chat Completions endpoint and validates model JSON before storing it. Set `GEMINI_API_KEY` or `OPENAI_API_KEY` separately for recorded English audio commands; caption transcription remains behind `TranscriptionProvider` and requires a word-timestamp-capable provider when that later editing slice is enabled.
+Unit/integration coverage includes OAuth-state rejection, token
+encryption/redaction/refresh, niche validation, script version conflicts,
+caption operations, malicious media rejection, DST conversion, idempotency,
+partial publishing, auto-publish policy, grounded comment citations, and
+provider adapter contracts. The Playwright suite runs the labeled demo server
+across desktop and mobile viewports.
 
 ## Deployment
 
-Deploy two services from the same commit:
+Two services from the same commit, each with its own Dockerfile:
 
-- Web: `apps/web/Dockerfile`, expose port 3000, command `pnpm --filter @bro/web start`.
-- Worker: `apps/worker/Dockerfile`, no public port, command `node apps/worker/dist/index.js`.
+- **Web** — `apps/web/Dockerfile`, port 3000, health check `/`.
+- **Worker** — `apps/worker/Dockerfile`, no public port, FFmpeg preinstalled.
 
-On Railway, create web and worker services, attach the same Supabase/Postgres connection and secrets, set the web health check to `/`, and run `pnpm --filter @bro/db db:migrate` as a release command before either process starts. Install FFmpeg in the worker image (already included). Scale the worker cautiously because pg-boss provides durable delivery but provider quotas remain shared.
+Attach the same Supabase/Postgres connection and provider secrets to both
+services, and run `pnpm --filter @bro/db db:migrate` as a release step before
+either process starts.
 
 ## Privacy and retention
 
-Tokens are application-encrypted with authenticated encryption and key versioning. Private media uses short-lived signed URLs. Logs redact common secret fields. Disconnect attempts provider revocation and removes the connection. Account deletion attempts token revocation, removes original/audio/render objects, deletes the user-owned database graph, and removes the Supabase Auth user; any provider/storage cleanup warning is surfaced rather than hidden.
+Provider tokens are encrypted with authenticated encryption and key
+versioning before storage; the browser never sees them. Private media is
+served through short-lived signed URLs. Disconnecting a provider revokes its
+token where the provider supports it; deleting an account revokes tokens,
+removes original/audio/rendered media, and deletes the user's data graph.
 
-Recommended production retention: delete temporary extracted audio after caption approval or within seven days, expire trend runs after six hours, retain bounded normalized source/comment records only while the account remains connected, and delete all cached analyses with their owning user.
+## Project status
 
-## Honest implementation status
+> [!IMPORTANT]
+> Real OAuth, owned-content/comment sync, resumable YouTube upload, Instagram
+> Reels publishing, durable scheduling, and FFmpeg caption rendering are all
+> implemented and covered by automated tests — but **not yet verified against
+> a real YouTube channel or Instagram account**, since that requires
+> human-supplied credentials and, for Instagram, an eligible Creator/Business
+> account plus Meta App Review.
 
-The demo and production boundaries are implemented. Real OAuth exchanges, owned-content/comment sync, token refresh, YouTube resumable upload, Instagram Reels publishing, pg-boss scheduling, Supabase Storage processing, Responses tools, and FFmpeg worker paths exist. They are covered by unit/contract/browser tests but cannot be claimed as live-provider verified without human-supplied credentials and provider approvals.
+Known gaps:
 
-Known code limitations:
+- Caption timing comes from the transcription provider's word alignment and
+  isn't yet independently editable — only cue text can be adjusted before
+  burn-in.
+- Instagram's long-lived-token refresh strategy needs revalidation against
+  the exact Meta product/API version selected before public launch.
+- A credential-backed Supabase/RLS integration test with two real users is
+  still missing; route-level ownership checks and RLS migrations exist.
 
-- Instagram long-lived-token exchange/refresh strategy must be revalidated against the selected current Meta login product before launch.
-- Production cross-user isolation is enforced in routes/RLS but still needs a credential-backed Supabase integration test environment.
+### Roadmap
 
-Provider-policy/access limitations are distinct: Google verification, Meta App Review and account eligibility, Reddit approval, quota allocation, and real credential-backed publish verification remain human/provider-console work.
-
-## Post-MVP roadmap
-
-1. Richer Reels/Shorts editing: trimming, reframing, caption animation, B-roll, and music while preserving the current project model.
-2. Automated quality/evaluation fixtures for scripts, niche inference, and comment grounding.
-3. Suggested posting-time analytics while keeping manual scheduling authoritative.
-4. Team/collaboration support only after the solo workflow is stable.
-5. Additional networks through the existing adapter interfaces, not one-off integrations.
+1. Cue timing/style controls on top of the live text-only caption editor.
+2. Richer vertical editing — trim, reframe, B-roll, music.
+3. Evaluation fixtures for script/niche/comment output quality.
+4. Suggested posting-time analytics, with manual scheduling staying authoritative.
+5. Team/collaboration support once the solo workflow is stable.
