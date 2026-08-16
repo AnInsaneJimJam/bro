@@ -374,14 +374,12 @@ export function Dashboard() {
           >
             <Menu />
           </button>
-          <div>
-            <h1>
-              {active === 'Home'
-                ? `Good morning, ${home?.profile?.displayName || 'Creator'}`
-                : 'Bro ' + active}
-            </h1>
-            <p>Here’s what’s happening with your content today.</p>
-          </div>
+          {active === 'Home' && (
+            <div>
+              <h1>Good morning, {home?.profile?.displayName || 'Creator'}</h1>
+              <p>Here’s what’s happening with your content today.</p>
+            </div>
+          )}
           <div className="profile-facts">
             <div>
               <span>Your niche</span>

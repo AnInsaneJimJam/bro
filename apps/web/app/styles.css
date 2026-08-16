@@ -848,6 +848,7 @@ header p {
 .profile-facts {
   display: flex;
   gap: 36px;
+  margin-left: auto;
 }
 .profile-facts > div {
   padding-left: 24px;
