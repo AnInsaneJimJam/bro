@@ -495,7 +495,8 @@ button[data-busy='true']::after {
   background: #fff;
 }
 .landing-section-heading h2,
-.landing-connect h2 {
+.landing-connect h2,
+.landing-invite h2 {
   margin: 0;
   font:
     500 clamp(56px, 6vw, 88px) / 0.98 Georgia,
@@ -736,6 +737,36 @@ button[data-busy='true']::after {
 .landing-proof svg {
   width: 21px;
   stroke-width: 1.6;
+}
+.landing-invite {
+  border-top: 1px solid var(--line);
+  padding: 100px 32px 110px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  background: var(--surface-2);
+}
+.landing-invite-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  margin-bottom: 22px;
+  border: 1px solid var(--coral-line);
+  border-radius: var(--r-full);
+  background: var(--coral-wash);
+  color: var(--coral-ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.landing-invite > p {
+  max-width: 620px;
+  margin: 22px auto 30px;
+  color: #35353b;
+  font-size: 18px;
+  line-height: 1.55;
 }
 .landing-footer {
   width: min(1440px, calc(100% - 64px));

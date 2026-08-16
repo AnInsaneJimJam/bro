@@ -6,6 +6,7 @@ import {
   Instagram,
   Lightbulb,
   LockKeyhole,
+  Mail,
   MessageCircle,
   Play,
   ShieldCheck,
@@ -14,6 +15,22 @@ import {
   Youtube,
 } from 'lucide-react';
 import { isDemoMode } from '@/lib/auth';
+
+const waitlistBody = [
+  'Hi Bro team,',
+  '',
+  "I'd like to join the waitlist.",
+  '',
+  'Instagram handle: ',
+  'Gmail ID used for YouTube: ',
+  '',
+  'Thanks!',
+].join('\n');
+const waitlistHref = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+  'anand47bansal@gmail.com'
+)}&su=${encodeURIComponent('Bro waitlist request')}&body=${encodeURIComponent(
+  waitlistBody
+)}`;
 
 const workflow = [
   {
@@ -245,6 +262,23 @@ export function LandingPage() {
             <Youtube /> English Shorts + Reels
           </span>
         </div>
+      </section>
+
+      <section className="landing-invite">
+        <span className="landing-invite-badge">Invite only</span>
+        <h2>
+          Onboarding creators
+          <br /> one at a time<span>.</span>
+        </h2>
+        <p>
+          Bro is invite-only while we work closely with the first group of
+          creators. Send over your Instagram handle and the Google account you
+          publish from, and we&rsquo;ll set up your access.
+        </p>
+        <a className="landing-button primary large" href={waitlistHref}>
+          <Mail />
+          Join the waitlist
+        </a>
       </section>
 
       <footer className="landing-footer">
