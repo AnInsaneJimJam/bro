@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   createDatabase,
   publishJobs,
@@ -10,6 +10,18 @@ import {
 import { requireUser } from '@/lib/auth';
 import { createSupabaseAdmin } from '@/lib/supabase/admin';
 import { jsonError } from '@/lib/http';
+
+// Jobs still in flight; deleting the video out from under one of these would
+// strand a scheduled post or an in-progress/retryable upload with no media.
+// A job in any other state (published, partially_published, failed_permanent,
+// cancelled) is finished, so it no longer needs the local video to exist.
+const activePublishStates = [
+  'awaiting_confirmation',
+  'scheduled',
+  'processing',
+  'uploading',
+  'failed_retryable',
+];
 
 export async function DELETE(
   _req: Request,
@@ -42,23 +54,35 @@ export async function DELETE(
       throw Object.assign(new Error('Video project not found'), {
         status: 404,
       });
-    const [job] = await database.db
+    const [activeJob] = await database.db
       .select({ id: publishJobs.id })
       .from(publishJobs)
-      .where(eq(publishJobs.projectId, projectId))
+      .where(
+        and(
+          eq(publishJobs.projectId, projectId),
+          inArray(publishJobs.state, activePublishStates)
+        )
+      )
       .limit(1);
-    const [post] = await database.db
-      .select({ id: socialPosts.id })
-      .from(socialPosts)
-      .where(eq(socialPosts.projectId, projectId))
-      .limit(1);
-    if (job || post)
+    if (activeJob)
       throw Object.assign(
         new Error(
-          'This video has scheduled or published jobs and cannot be deleted. Cancel any scheduled posts in Calendar first; a video that has already been published cannot be removed from Bro.'
+          'This video has a scheduled or in-progress publish job. Cancel it in Calendar (or wait for it to finish) before deleting.'
         ),
         { status: 409 }
       );
+    // Finished jobs and their social posts are real history (and comments
+    // reference the post) — detach them from the video instead of blocking
+    // deletion or deleting those records. publishJobs.projectId has no
+    // cascade, so it must be cleared before the video row can go.
+    await database.db
+      .update(publishJobs)
+      .set({ projectId: null })
+      .where(eq(publishJobs.projectId, projectId));
+    await database.db
+      .update(socialPosts)
+      .set({ projectId: null })
+      .where(eq(socialPosts.projectId, projectId));
     const admin = createSupabaseAdmin(),
       metadata = (project.metadata || {}) as {
         publishObjectKey?: string;
