@@ -12,7 +12,7 @@ const config: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), geolocation=(), microphone=(self)',
+            value: 'camera=(self), geolocation=(), microphone=(self)',
           },
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
           {
