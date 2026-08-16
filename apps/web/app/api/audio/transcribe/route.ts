@@ -31,7 +31,24 @@ export async function POST(req: Request) {
       groqKey = process.env.GROQ_API_KEY,
       mimeType = file.type.toLowerCase().split(';', 1)[0]?.trim();
     let text: string, provider: 'gemini' | 'openai' | 'groq';
-    if (geminiKey && geminiAudioTypes.has(mimeType || '')) {
+    // Groq is tried first: it's free, has no observed reliability issues, and
+    // already backs video transcription. Gemini is a last-resort fallback
+    // only, since its audio endpoint has been unreliable (intermittent 503s).
+    if (groqKey) {
+      const transcriber = new OpenAITranscriptionProvider(
+        createGroqTranscriptionClient(groqKey),
+        process.env.GROQ_COMMAND_TRANSCRIPTION_MODEL || 'whisper-large-v3-turbo'
+      );
+      text = await transcriber.transcribeCommand(file);
+      provider = 'groq';
+    } else if (openAiKey) {
+      const transcriber = new OpenAITranscriptionProvider(
+        new OpenAI({ apiKey: openAiKey }),
+        process.env.OPENAI_COMMAND_TRANSCRIPTION_MODEL || 'gpt-transcribe'
+      );
+      text = await transcriber.transcribeCommand(file);
+      provider = 'openai';
+    } else if (geminiKey && geminiAudioTypes.has(mimeType || '')) {
       const transcriber = new GeminiCommandTranscriptionProvider(
         geminiKey,
         process.env.GEMINI_COMMAND_TRANSCRIPTION_MODEL ||
@@ -40,24 +57,10 @@ export async function POST(req: Request) {
       );
       text = await transcriber.transcribeCommand(file);
       provider = 'gemini';
-    } else if (openAiKey) {
-      const transcriber = new OpenAITranscriptionProvider(
-        new OpenAI({ apiKey: openAiKey }),
-        process.env.OPENAI_COMMAND_TRANSCRIPTION_MODEL || 'gpt-transcribe'
-      );
-      text = await transcriber.transcribeCommand(file);
-      provider = 'openai';
-    } else if (groqKey) {
-      const transcriber = new OpenAITranscriptionProvider(
-        createGroqTranscriptionClient(groqKey),
-        process.env.GROQ_COMMAND_TRANSCRIPTION_MODEL || 'whisper-large-v3-turbo'
-      );
-      text = await transcriber.transcribeCommand(file);
-      provider = 'groq';
     } else if (geminiKey)
       throw Object.assign(
         new Error(
-          'Gemini accepts WAV, MP3, AAC, OGG, AIFF, or FLAC command audio. Allow Bro to convert the browser recording to WAV, or add OPENAI_API_KEY as a fallback.'
+          'Gemini accepts WAV, MP3, AAC, OGG, AIFF, or FLAC command audio. Allow Bro to convert the browser recording to WAV, or add GROQ_API_KEY/OPENAI_API_KEY as a fallback.'
         ),
         { status: 415 }
       );
