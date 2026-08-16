@@ -93,7 +93,19 @@ export async function PATCH(
       );
     const { projectId } = await context.params,
       data = update.parse(await req.json());
-    validateCues(data.cues);
+    try {
+      validateCues(data.cues);
+    } catch {
+      // Cue timing is read-only in the editor, so an overlap here is never
+      // something the creator did — it's leftover from an older transcript
+      // pass generated before cue timing was corrected at the source.
+      throw Object.assign(
+        new Error(
+          'These captions have an internal timing conflict from an earlier transcript pass. Use "Retry transcription & captions" on the Upload page to regenerate them, then try saving again.'
+        ),
+        { status: 409 }
+      );
+    }
     const database = createDatabase();
     close = database.close;
     const changed = await database.db.transaction(async (tx) => {

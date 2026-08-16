@@ -28,6 +28,24 @@ export function segmentCaptions(
     }
   }
   if (current.length) cues.push(toCue(current));
+  return clampOverlaps(cues);
+}
+// Whisper's word-level timestamps can overlap by a few hundred ms between
+// segments, which segmentCaptions inherits directly since it just slices
+// consecutive words. Left uncorrected, the very cues Bro generated fail its
+// own validateCues the moment a creator opens the caption editor and saves
+// without changing anything. Clamp each cue to start no earlier than the
+// previous cue ends, so the stored cues are always valid on arrival.
+function clampOverlaps(cues: CaptionCue[]): CaptionCue[] {
+  const minCueDuration = 0.05;
+  for (let i = 1; i < cues.length; i++) {
+    const previous = cues[i - 1]!,
+      cue = cues[i]!;
+    if (cue.start < previous.end) {
+      cue.start = previous.end;
+      if (cue.end <= cue.start) cue.end = cue.start + minCueDuration;
+    }
+  }
   return cues;
 }
 function toCue(words: TimedWord[]): CaptionCue {

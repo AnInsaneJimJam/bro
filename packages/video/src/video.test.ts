@@ -29,6 +29,19 @@ describe('captions', () => {
         { text: 'b', start: 1, end: 3 },
       ])
     ).toThrow());
+  it('clamps overlapping ASR word timestamps into valid, non-overlapping cues', () => {
+    const cues = segmentCaptions([
+      { text: 'Hello', start: 0, end: 1 },
+      { text: 'world.', start: 0.8, end: 1.6 },
+      // Whisper-style overlap: this word's start lands before the
+      // previous cue's end.
+      { text: 'Again', start: 1.4, end: 2.4 },
+      { text: 'now.', start: 2.6, end: 3 },
+    ]);
+    expect(() => validateCues(cues)).not.toThrow();
+    for (let i = 1; i < cues.length; i++)
+      expect(cues[i]!.start).toBeGreaterThanOrEqual(cues[i - 1]!.end);
+  });
   it('splits and merges cues', () => {
     const split = splitCue(
       [{ text: 'hello creator world', start: 0, end: 3 }],

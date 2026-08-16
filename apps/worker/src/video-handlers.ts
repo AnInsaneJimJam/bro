@@ -309,9 +309,9 @@ export function createVideoHandlers(): Pick<
               project.originalKey
             )
           );
-          await writeFile(
-            assPath,
-            captionsToAss(
+          let ass: string;
+          try {
+            ass = captionsToAss(
               rows.map((row) => ({
                 text: row.text || '',
                 start: row.start || 0,
@@ -322,8 +322,16 @@ export function createVideoHandlers(): Pick<
                 outline?: number;
                 verticalPosition?: 'top' | 'middle' | 'bottom';
               }
-            )
-          );
+            );
+          } catch {
+            // Cue timing is read-only in the editor, so an overlap here is
+            // leftover from a transcript pass generated before cue timing
+            // was corrected at the source, not something the creator did.
+            throw new Error(
+              'These captions have an internal timing conflict from an earlier transcript pass. Use "Retry transcription & captions" on the Upload page to regenerate them, then try burning in captions again.'
+            );
+          }
+          await writeFile(assPath, ass);
           await runFfmpeg(renderArgs(inputPath, assPath, outputPath));
           const rendered = await readFile(outputPath),
             renderedKey = `${data.userId}/${data.projectId}/rendered.mp4`,
