@@ -809,6 +809,11 @@ function Videos() {
         setCaptionsStatus(
           'Captioned video ready. Publishing will use this version.'
         );
+        const media = await fetch(
+            `/api/videos/${projectId}/media?variant=rendered`
+          ),
+          signedMedia = await media.json();
+        if (media.ok && signedMedia.url) setPreview(signedMedia.url);
         break;
       }
       if (
