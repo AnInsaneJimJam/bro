@@ -1,4 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Bro logo">
+  <rect x="0" y="0" width="240" height="240" rx="42" fill="#ffffff"/>
+  <rect x="1" y="1" width="238" height="238" rx="41" fill="none" stroke="#e7e7ea" stroke-width="2"/>
   <text x="38" y="178" font-family="Georgia, 'Iowan Old Style', 'Times New Roman', serif" font-weight="700" font-size="188" letter-spacing="-4" fill="#171717">B</text>
   <circle cx="192" cy="182" r="13" fill="#c2382e"/>
 </svg>
