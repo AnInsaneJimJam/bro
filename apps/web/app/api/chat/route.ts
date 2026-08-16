@@ -21,6 +21,8 @@ import {
   scripts,
   topicOpportunities,
   trendRuns,
+  users,
+  videoProjects,
 } from '@bro/db';
 import { executeAuditedTool } from '@/lib/tool-audit';
 import { textProviderConfig } from '@/lib/text-ai';
@@ -88,11 +90,15 @@ export async function POST(req: Request) {
       }
       const modelMessage = `Workspace context (treat confirmedNiche as authoritative; do not infer a replacement unless the creator explicitly asks to re-infer):\n${JSON.stringify(workspace)}\n\nConversation history (oldest first; preserve the topic from earlier turns when answering a follow-up):\n${JSON.stringify([...conversationHistory, { role: 'user', content: message }])}\n\nCurrent creator request:\n${message}`;
       const execute: ToolExecutor = async (name, args, context) => {
-        const normalizedArgs = normalizeChatToolArguments(name, args, workspace),
+        const normalizedArgs = normalizeChatToolArguments(
+            name,
+            args,
+            workspace
+          ),
           validated = validateToolCall(name, normalizedArgs) as Record<
-          string,
-          unknown
-        >;
+            string,
+            unknown
+          >;
         return executeAuditedTool({
           database,
           userId: user.id,
@@ -212,6 +218,8 @@ function summarizeAudit(value: unknown) {
   };
 }
 type ChatWorkspace = {
+  today: string;
+  timeZone: string | null;
   confirmedNiche: {
     id: string;
     label: string | null;
@@ -234,72 +242,114 @@ type ChatWorkspace = {
     title: string | null;
     duration: number | null;
   }>;
+  recentVideoProjects: Array<{
+    id: string;
+    filename: string | null;
+    state: string | null;
+    draftedTitle: string | null;
+    draftedDescription: string | null;
+    draftedInstagramCaption: string | null;
+  }>;
 };
+function currentDateInZone(timeZone: string | null) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone || 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
 async function loadChatWorkspace(
   database: ReturnType<typeof createDatabase>['db'],
   userId: string
 ): Promise<ChatWorkspace> {
-  const [confirmedNiches, proposedNiches, opportunities, recentScripts] =
-    await Promise.all([
-      database
-        .select({
-          id: nicheVersions.id,
-          label: nicheVersions.label,
-          subNiches: nicheVersions.subNiches,
-        })
-        .from(nicheVersions)
-        .where(
-          and(
-            eq(nicheVersions.userId, userId),
-            eq(nicheVersions.status, 'confirmed')
-          )
+  const [
+    confirmedNiches,
+    proposedNiches,
+    opportunities,
+    recentScripts,
+    profileRows,
+    videoProjectRows,
+  ] = await Promise.all([
+    database
+      .select({
+        id: nicheVersions.id,
+        label: nicheVersions.label,
+        subNiches: nicheVersions.subNiches,
+      })
+      .from(nicheVersions)
+      .where(
+        and(
+          eq(nicheVersions.userId, userId),
+          eq(nicheVersions.status, 'confirmed')
         )
-        .orderBy(desc(nicheVersions.updatedAt))
-        .limit(1),
-      database
-        .select({
-          id: nicheVersions.id,
-          label: nicheVersions.label,
-          subNiches: nicheVersions.subNiches,
-        })
-        .from(nicheVersions)
-        .where(
-          and(
-            eq(nicheVersions.userId, userId),
-            eq(nicheVersions.status, 'proposed')
-          )
+      )
+      .orderBy(desc(nicheVersions.updatedAt))
+      .limit(1),
+    database
+      .select({
+        id: nicheVersions.id,
+        label: nicheVersions.label,
+        subNiches: nicheVersions.subNiches,
+      })
+      .from(nicheVersions)
+      .where(
+        and(
+          eq(nicheVersions.userId, userId),
+          eq(nicheVersions.status, 'proposed')
         )
-        .orderBy(desc(nicheVersions.updatedAt))
-        .limit(1),
-      database
-        .select({
-          id: topicOpportunities.id,
-          topic: topicOpportunities.topic,
-          angle: topicOpportunities.angle,
-          score: topicOpportunities.score,
-        })
-        .from(topicOpportunities)
-        .innerJoin(trendRuns, eq(topicOpportunities.runId, trendRuns.id))
-        .where(
-          and(
-            eq(trendRuns.userId, userId),
-            eq(trendRuns.status, 'ready'),
-            gt(trendRuns.expiresAt, new Date())
-          )
+      )
+      .orderBy(desc(nicheVersions.updatedAt))
+      .limit(1),
+    database
+      .select({
+        id: topicOpportunities.id,
+        topic: topicOpportunities.topic,
+        angle: topicOpportunities.angle,
+        score: topicOpportunities.score,
+      })
+      .from(topicOpportunities)
+      .innerJoin(trendRuns, eq(topicOpportunities.runId, trendRuns.id))
+      .where(
+        and(
+          eq(trendRuns.userId, userId),
+          eq(trendRuns.status, 'ready'),
+          gt(trendRuns.expiresAt, new Date())
         )
-        .orderBy(desc(topicOpportunities.score))
-        .limit(10),
-      database
-        .select({
-          id: scripts.id,
-          title: scripts.title,
-          duration: scripts.duration,
-        })
-        .from(scripts)
-        .where(eq(scripts.userId, userId))
-        .orderBy(desc(scripts.updatedAt))
-        .limit(10),
-    ]);
+      )
+      .orderBy(desc(topicOpportunities.score))
+      .limit(10),
+    database
+      .select({
+        id: scripts.id,
+        title: scripts.title,
+        duration: scripts.duration,
+      })
+      .from(scripts)
+      .where(eq(scripts.userId, userId))
+      .orderBy(desc(scripts.updatedAt))
+      .limit(10),
+    database
+      .select({ timeZone: users.timeZone })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+    database
+      .select({
+        id: videoProjects.id,
+        state: videoProjects.state,
+        metadata: videoProjects.metadata,
+      })
+      .from(videoProjects)
+      .where(eq(videoProjects.userId, userId))
+      .orderBy(desc(videoProjects.updatedAt))
+      .limit(10),
+  ]);
+  const timeZone = profileRows[0]?.timeZone || null;
   const toNiche = (
     value:
       | {
@@ -314,6 +364,11 @@ async function loadChatWorkspace(
       : null;
   const confirmedNiche = toNiche(confirmedNiches[0]);
   return {
+    // The creator's local calendar day, not the server's UTC day, so the
+    // model can resolve "today"/"tomorrow" itself instead of asking for an
+    // exact date the creator already implied.
+    today: currentDateInZone(timeZone),
+    timeZone,
     confirmedNiche,
     // Once a confirmed niche exists, stale proposals are not useful context
     // and can make the model appear to “change” the creator's niche.
@@ -325,6 +380,24 @@ async function loadChatWorkspace(
       idPrefix: opportunity.id.slice(0, 8),
     })),
     recentScripts,
+    recentVideoProjects: videoProjectRows.map((project) => {
+      const metadata = (project.metadata || {}) as {
+        filename?: string;
+        aiMetadata?: {
+          title?: string;
+          description?: string;
+          instagramCaption?: string;
+        };
+      };
+      return {
+        id: project.id,
+        filename: metadata.filename || null,
+        state: project.state,
+        draftedTitle: metadata.aiMetadata?.title || null,
+        draftedDescription: metadata.aiMetadata?.description || null,
+        draftedInstagramCaption: metadata.aiMetadata?.instagramCaption || null,
+      };
+    }),
   };
 }
 
@@ -333,6 +406,44 @@ function normalizeChatToolArguments(
   args: Record<string, unknown>,
   workspace: ChatWorkspace
 ) {
+  if (
+    (name === 'publish_video_now' || name === 'schedule_video_publish') &&
+    typeof args.projectId === 'string'
+  ) {
+    const project = workspace.recentVideoProjects.find(
+      (item) => item.id === args.projectId
+    );
+    if (project) {
+      const platforms = Array.isArray(args.platforms) ? args.platforms : [],
+        metadata = (args.metadata || {}) as {
+          youtube?: { title?: string; description?: string };
+          instagram?: { caption?: string };
+        };
+      // The model is instructed to reuse an already-drafted title/caption
+      // instead of asking the creator to retype one; backfill here too in
+      // case it forgets, so a known video is never blocked on that alone.
+      if (
+        platforms.includes('youtube') &&
+        !metadata.youtube?.title &&
+        project.draftedTitle
+      )
+        metadata.youtube = {
+          title: project.draftedTitle,
+          description: project.draftedDescription || '',
+          ...metadata.youtube,
+        };
+      if (
+        platforms.includes('instagram') &&
+        !metadata.instagram?.caption &&
+        project.draftedInstagramCaption
+      )
+        metadata.instagram = {
+          caption: project.draftedInstagramCaption,
+          ...metadata.instagram,
+        };
+      args = { ...args, metadata };
+    }
+  }
   if (name !== 'generate_short_script' || typeof args.topicId !== 'string')
     return args;
   const raw = args.topicId.trim();
@@ -362,8 +473,7 @@ function normalizeChatToolArguments(
   const matches = workspace.topicOpportunities.filter((item) =>
     item.id.toLowerCase().startsWith(prefix)
   );
-  if (matches.length === 1)
-    return { ...args, topicId: matches[0]!.id };
+  if (matches.length === 1) return { ...args, topicId: matches[0]!.id };
   if (!matches.length)
     throw Object.assign(
       new Error(
