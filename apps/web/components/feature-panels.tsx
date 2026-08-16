@@ -621,6 +621,8 @@ function Videos() {
     [drafting, setDrafting] = useState(false),
     [refreshing, setRefreshing] = useState(false),
     [retrying, setRetrying] = useState(false),
+    [transcriptionFailed, setTranscriptionFailed] = useState(false),
+    [retryingTranscription, setRetryingTranscription] = useState(false),
     [publishing, setPublishing] = useState(false),
     [metadataReady, setMetadataReady] = useState(false),
     [preview, setPreview] = useState(''),
@@ -930,6 +932,7 @@ function Videos() {
     setCuesUpdatedAt('');
     setCaptionsStatus('');
     setCaptionedReady(false);
+    setTranscriptionFailed(false);
     try {
       setStatus('Requesting a private signed upload…');
       const signed = await fetch('/api/uploads/sign', {
@@ -1050,6 +1053,7 @@ function Videos() {
     } else if (statusMetadata.transcriptionStatus === 'failed') {
       // Nothing else will arrive for this project, so stop the status poll.
       setMetadataReady(true);
+      setTranscriptionFailed(true);
       setStatus(
         statusMetadata.notice ||
           'Bro could not read the spoken text. Write the post fields yourself and publish.'
@@ -1068,6 +1072,15 @@ function Videos() {
         if (media.ok) setPreview(signed.url);
       }
     }
+  }
+  async function retryTranscription() {
+    if (!projectId || projectId === 'demo') return;
+    transcriptionRequested.current.delete(projectId);
+    metadataRequested.current.delete(projectId);
+    captionsLoaded.current.delete(projectId);
+    setTranscriptionFailed(false);
+    setMetadataReady(false);
+    await startTranscription(projectId);
   }
   async function retryValidation() {
     if (!projectId || projectId === 'demo') return;
@@ -1284,6 +1297,23 @@ function Videos() {
                       Retry processing
                     </button>
                   )}
+                {projectId && projectId !== 'demo' && transcriptionFailed && (
+                  <button
+                    onClick={async () => {
+                      setRetryingTranscription(true);
+                      try {
+                        await retryTranscription();
+                      } finally {
+                        setRetryingTranscription(false);
+                      }
+                    }}
+                    disabled={retryingTranscription}
+                    data-busy={retryingTranscription}
+                  >
+                    <RefreshCw />
+                    Retry transcription &amp; captions
+                  </button>
+                )}
               </div>
             </>
           )}
