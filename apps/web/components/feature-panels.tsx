@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseBrowserClient } from '../lib/supabase/browser';
 import {
   CalendarDays,
   Check,
@@ -565,14 +565,23 @@ function Videos() {
         setStatus(details.error || 'Bro could not start the upload.');
         return;
       }
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL,
-        key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!url || !key) {
-        setStatus('Supabase browser configuration is missing.');
+      const configResponse = await fetch('/api/auth/config', {
+          cache: 'no-store',
+        }),
+        config = (await configResponse.json()) as {
+          url?: string;
+          anonKey?: string;
+          error?: string;
+        };
+      if (!configResponse.ok || !config.url || !config.anonKey) {
+        setStatus(config.error || 'Supabase browser configuration is missing.');
         return;
       }
       setStatus('Uploading the original video privately…');
-      const client = createClient(url, key),
+      const client = createSupabaseBrowserClient({
+          url: config.url,
+          anonKey: config.anonKey,
+        }),
         result = await client.storage
           .from(details.bucket)
           .uploadToSignedUrl(details.objectKey, details.token, file, {
