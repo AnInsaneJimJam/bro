@@ -1772,9 +1772,42 @@ function Comments() {
         body: JSON.stringify({ action: 'sync', platforms: providers }),
       }),
       data = await response.json();
-    setMessage(
-      response.ok ? data.message || 'Comment sync queued.' : data.error
-    );
+    if (!response.ok) {
+      setMessage(data.error);
+      return;
+    }
+    if (!data.bossJobId) {
+      setMessage(data.message || 'Comment sync queued.');
+      return;
+    }
+    setMessage('Syncing comments from owned posts…');
+    for (let attempt = 0; attempt < 30; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const statusResponse = await fetch(
+          `/api/sync/content/status?kind=sync-comments&bossJobId=${encodeURIComponent(data.bossJobId)}`
+        ),
+        statusData = await statusResponse.json();
+      if (!statusResponse.ok) {
+        setMessage(statusData.error || 'Comment sync status is unavailable.');
+        return;
+      }
+      if (statusData.state === 'completed') {
+        setMessage('Comment sync completed.');
+        await refreshList();
+        return;
+      }
+      if (
+        statusData.state === 'failed_retryable' ||
+        statusData.state === 'failed_permanent'
+      ) {
+        setMessage(
+          statusData.lastErrorMessage ||
+            'Comment sync failed. Reconnect and try again.'
+        );
+        return;
+      }
+    }
+    setMessage('Comment sync is still running. Refresh later.');
   }
   async function analyze() {
     await run('analyze', analyzeComments);

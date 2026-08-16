@@ -7,6 +7,7 @@ import { jsonError } from '@/lib/http';
 
 const query = z.object({
   bossJobId: z.string().min(1).max(200),
+  kind: z.enum(['sync-content', 'sync-comments']).default('sync-content'),
 });
 
 export async function GET(request: Request) {
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
     const user = await requireUser();
     if (user.demo)
       return NextResponse.json({ mode: 'demo', state: 'completed' });
-    const { bossJobId } = query.parse(
+    const { bossJobId, kind } = query.parse(
       Object.fromEntries(new URL(request.url).searchParams)
     );
     const database = createDatabase();
@@ -31,13 +32,13 @@ export async function GET(request: Request) {
       .where(
         and(
           eq(backgroundJobs.userId, user.id),
-          eq(backgroundJobs.kind, 'sync-content'),
+          eq(backgroundJobs.kind, kind),
           eq(backgroundJobs.bossJobId, bossJobId)
         )
       )
       .limit(1);
     if (!job)
-      throw Object.assign(new Error('Content sync job not found'), {
+      throw Object.assign(new Error('Sync job not found'), {
         status: 404,
       });
     return NextResponse.json(job);
