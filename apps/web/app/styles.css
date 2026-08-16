@@ -2363,6 +2363,9 @@ header p {
   background: #fff2f0;
   color: var(--coral);
 }
+.calendar-job[role='button'] {
+  cursor: pointer;
+}
 .calendar-job.is-published {
   background: #edf8f0;
   color: var(--green);
@@ -2377,11 +2380,26 @@ header p {
 }
 .calendar-job-icons {
   display: inline-flex;
-  gap: 3px;
+  gap: 5px;
 }
 .calendar-job-icons svg {
   width: 10px;
   height: 10px;
+}
+.calendar-job-icons a {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: inherit;
+  text-decoration: none;
+}
+.calendar-job-icons a:hover {
+  text-decoration: underline;
+}
+.calendar-job-link-mark {
+  width: 7px !important;
+  height: 7px !important;
+  opacity: 0.7;
 }
 .calendar-job-more {
   font-size: 10px;

@@ -1954,13 +1954,23 @@ function Calendar() {
                   <span className="calendar-daynum">{day}</span>
                   <div className="calendar-jobs">
                     {dayJobs.slice(0, 2).map((job) => (
-                      <button
+                      <div
                         key={job.id}
-                        type="button"
+                        role={job.state === 'scheduled' ? 'button' : undefined}
+                        tabIndex={job.state === 'scheduled' ? 0 : undefined}
                         className={`calendar-job ${jobStateClass(job.state)}`}
                         onClick={(event) => {
                           event.stopPropagation();
                           if (job.state === 'scheduled') cancel(job.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (
+                            job.state === 'scheduled' &&
+                            (event.key === 'Enter' || event.key === ' ')
+                          ) {
+                            event.preventDefault();
+                            cancel(job.id);
+                          }
                         }}
                         title={
                           job.state === 'scheduled'
@@ -1976,17 +1986,43 @@ function Calendar() {
                           })}
                         </span>
                         <span className="calendar-job-icons">
-                          {(job.destinations || []).map((destination) => (
-                            <i key={`${job.id}-${destination.provider}`}>
-                              {destination.provider === 'youtube' ? (
-                                <Youtube />
-                              ) : (
-                                <Instagram />
-                              )}
-                            </i>
-                          ))}
+                          {(job.destinations || []).map((destination) =>
+                            destination.url ? (
+                              <a
+                                key={`${job.id}-${destination.provider}`}
+                                href={destination.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={`Open on ${destination.provider}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {destination.provider === 'youtube' ? (
+                                  <Youtube />
+                                ) : (
+                                  <Instagram />
+                                )}
+                                <ExternalLink className="calendar-job-link-mark" />
+                              </a>
+                            ) : (
+                              <i
+                                key={`${job.id}-${destination.provider}`}
+                                title={
+                                  destination.state === 'published'
+                                    ? 'Published — link unavailable'
+                                    : destination.errorMessage ||
+                                      destination.state
+                                }
+                              >
+                                {destination.provider === 'youtube' ? (
+                                  <Youtube />
+                                ) : (
+                                  <Instagram />
+                                )}
+                              </i>
+                            )
+                          )}
                         </span>
-                      </button>
+                      </div>
                     ))}
                     {dayJobs.length > 2 && (
                       <span className="calendar-job-more">
