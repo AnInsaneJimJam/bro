@@ -22,18 +22,36 @@ import {
 import { FeaturePanel } from './feature-panels';
 import { encodeWav } from '@/lib/audio';
 
-const nav = [
-  [Home, 'Home'],
-  [MessageCircle, 'Bro Chat'],
-  [Lightbulb, 'Ideas'],
-  [FileText, 'Scripts'],
-  [Clapperboard, 'Upload'],
-  [Film, 'My Videos'],
-  [CalendarDays, 'Calendar'],
-  [MessageCircle, 'Comments'],
-  [Link2, 'Connections'],
-  [Settings, 'Settings'],
-] as const;
+type NavIcon = typeof Home;
+type NavItem = readonly [NavIcon, string];
+const navGroups: ReadonlyArray<{ label: string; items: readonly NavItem[] }> = [
+  {
+    label: 'Create',
+    items: [
+      [Home, 'Home'],
+      [MessageCircle, 'Bro Chat'],
+      [Lightbulb, 'Ideas'],
+      [FileText, 'Scripts'],
+    ],
+  },
+  {
+    label: 'Publish',
+    items: [
+      [Clapperboard, 'Upload'],
+      [Film, 'My Videos'],
+      [CalendarDays, 'Calendar'],
+    ],
+  },
+  {
+    label: 'Manage',
+    items: [
+      [MessageCircle, 'Comments'],
+      [Link2, 'Connections'],
+      [Settings, 'Settings'],
+    ],
+  },
+];
+const nav: readonly NavItem[] = navGroups.flatMap((group) => group.items);
 type HomeData = {
   mode: string;
   profile?: {
@@ -323,19 +341,24 @@ export function Dashboard() {
           <X />
         </button>
         <nav>
-          {nav.map(([Icon, label]) => (
-            <button
-              key={label}
-              className={active === label ? 'nav active' : 'nav'}
-              onClick={() => {
-                setActive(label);
-                location.hash = encodeURIComponent(label);
-                setMobile(false);
-              }}
-            >
-              <Icon />
-              <span>{label}</span>
-            </button>
+          {navGroups.map((group) => (
+            <div className="nav-group" key={group.label}>
+              <span className="nav-group-label">{group.label}</span>
+              {group.items.map(([Icon, label]) => (
+                <button
+                  key={label}
+                  className={active === label ? 'nav active' : 'nav'}
+                  onClick={() => {
+                    setActive(label);
+                    location.hash = encodeURIComponent(label);
+                    setMobile(false);
+                  }}
+                >
+                  <Icon />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
         {demoMode && (

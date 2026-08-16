@@ -189,7 +189,24 @@ function Ideas() {
     >
       <div className="opportunity-feed">
         {loading ? (
-          <p>Refreshing time-bounded signals…</p>
+          <div aria-hidden="true">
+            {[...Array(3)].map((_, i) => (
+              <article key={i} className="idea-skeleton-row">
+                <div className="skeleton" style={{ height: 26, width: 26 }} />
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <div
+                    className="skeleton"
+                    style={{ height: 17, width: '45%' }}
+                  />
+                  <div
+                    className="skeleton"
+                    style={{ height: 13, width: '80%' }}
+                  />
+                </div>
+                <div className="skeleton" style={{ height: 27, width: 60 }} />
+              </article>
+            ))}
+          </div>
         ) : message ? (
           <p>{message}</p>
         ) : items.length === 0 ? (
@@ -231,6 +248,11 @@ function Ideas() {
               <div className="op-score">
                 <strong>{x.score}</strong>
                 <span>Opportunity</span>
+                <div className="op-score-bar">
+                  <div
+                    style={{ width: `${Math.min(100, Math.max(0, x.score))}%` }}
+                  />
+                </div>
                 <time>
                   {new Date(x.freshness).toLocaleTimeString([], {
                     hour: '2-digit',
@@ -1633,7 +1655,27 @@ function MyVideos() {
       subtitle="Every upload, with the title, description, and caption Bro drafted for it."
     >
       {loading ? (
-        <p>Loading your videos…</p>
+        <div className="video-library" aria-hidden="true">
+          {[...Array(3)].map((_, i) => (
+            <div className="video-card video-card-skeleton" key={i}>
+              <div className="skeleton video-card-thumb-skeleton" />
+              <div className="video-card-body">
+                <div
+                  className="skeleton"
+                  style={{ height: 14, width: '70%' }}
+                />
+                <div
+                  className="skeleton"
+                  style={{ height: 11, width: '95%' }}
+                />
+                <div
+                  className="skeleton"
+                  style={{ height: 11, width: '60%' }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : projects.length === 0 ? (
         <div className="video-library-empty">
           <VerticalVideoGlyph />
