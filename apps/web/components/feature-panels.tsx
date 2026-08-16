@@ -1499,10 +1499,12 @@ function Videos() {
             Save captions
           </button>
           <button
+            className="burn-in-captions"
             onClick={burnInCaptions}
             disabled={burningIn}
             data-busy={burningIn}
           >
+            <Film />
             {captionedReady ? 'Re-burn captions' : 'Burn in captions'}
           </button>
           {captionsStatus && (

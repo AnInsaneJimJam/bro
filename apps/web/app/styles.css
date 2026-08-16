@@ -2240,6 +2240,20 @@ header p {
   background: var(--coral);
   color: #fff;
 }
+.burn-in-captions {
+  padding: 14px 22px !important;
+  font-size: 15px !important;
+  background: var(--coral) !important;
+  color: #fff !important;
+  border-color: var(--coral) !important;
+}
+.burn-in-captions svg {
+  width: 19px !important;
+  height: 19px !important;
+}
+.burn-in-captions:disabled {
+  opacity: 0.5;
+}
 .calendar-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
